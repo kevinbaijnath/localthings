@@ -2244,6 +2244,9 @@
       },
       "repeated_cleaning": {
         "name": "Powtarzanie sprzątania"
+      },
+      "tv_art_mode": {
+        "name": "Art Mode"
       }
     },
     "time": {
@@ -2299,6 +2302,11 @@
           }
         }
       }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
+      }
     }
   },
   "config": {
@@ -2307,7 +2315,8 @@
         "title": "Dodaj urządzenie Samsung",
         "description": "Podaj adres IP urządzenia Samsung. LocalThings skonfiguruje je automatycznie przy użyciu certyfikatu z własnym podpisem — w przypadku większości urządzeń nic więcej nie jest potrzebne.",
         "data": {
-          "host": "Adres IP"
+          "host": "Adres IP",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Lokalny adres IP urządzenia Samsung (np. 192.168.1.50)."
@@ -2317,7 +2326,8 @@
         "title": "Dodaj urządzenie Samsung",
         "description": "Podaj adres IP urządzenia Samsung. Zostaną ponownie użyte poświadczenia CA z istniejącego urządzenia LocalThings.",
         "data": {
-          "host": "Adres IP"
+          "host": "Adres IP",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Lokalny adres IP urządzenia Samsung (np. 192.168.1.50)."
@@ -2411,6 +2421,16 @@
         "data": {
           "device_token": "Token urządzenia (pozostaw puste, aby o niego poprosić)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2438,7 +2458,11 @@
       "invalid_token": "Urządzenie odrzuciło ten token. Pozostaw pole puste, aby poprosić o nowy.",
       "callback_port_in_use": "Port 8889 jest już zajęty w Home Assistant, zwykle przez wciąż oczekujące żądanie tokenu. Spróbuj ponownie za półtorej minuty.",
       "callback_cert_rejected": "Urządzenie oddzwoniło na port 8889, ale odrzuciło samopodpisany certyfikat Home Assistant. Wklej certyfikat i klucz CA AC14K_M, aby LocalThings podpisał certyfikat, który zostanie zaakceptowany; potem żądanie tokenu zostanie powtórzone.",
-      "callback_ca_rejected": "Urządzenie oddzwoniło na port 8889, ale odrzuciło również certyfikat podpisany przez AC14K_M. Wklej token uzyskany w inny sposób; błąd uzgadniania znajdziesz w dzienniku Home Assistant."
+      "callback_ca_rejected": "Urządzenie oddzwoniło na port 8889, ale odrzuciło również certyfikat podpisany przez AC14K_M. Wklej token uzyskany w inny sposób; błąd uzgadniania znajdziesz w dzienniku Home Assistant.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "Urządzenie jest już skonfigurowane",
@@ -2449,7 +2473,9 @@
       "reauth_unsupported": "To urządzenie nie ma tutaj poświadczeń do odnowienia. Jeśli przestało odpowiadać, usuń je i dodaj ponownie."
     },
     "progress": {
-      "legacy_token": "Oczekiwanie, aż {host} wyśle token urządzenia do Home Assistant na porcie 8889. Może to potrwać do półtorej minuty."
+      "legacy_token": "Oczekiwanie, aż {host} wyśle token urządzenia do Home Assistant na porcie 8889. Może to potrwać do półtorej minuty.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {

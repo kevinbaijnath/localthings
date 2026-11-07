@@ -2244,6 +2244,9 @@
       },
       "repeated_cleaning": {
         "name": "Reiniging herhalen"
+      },
+      "tv_art_mode": {
+        "name": "Art Mode"
       }
     },
     "time": {
@@ -2299,6 +2302,11 @@
           }
         }
       }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
+      }
     }
   },
   "config": {
@@ -2307,7 +2315,8 @@
         "title": "Samsung-apparaat toevoegen",
         "description": "Voer het IP-adres van je Samsung-apparaat in. LocalThings stelt het automatisch in met een zelfondertekend certificaat; de meeste apparaten hebben verder niets nodig.",
         "data": {
-          "host": "IP-adres"
+          "host": "IP-adres",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Het lokale IP-adres van je Samsung-apparaat (bijvoorbeeld 192.168.1.50)."
@@ -2317,7 +2326,8 @@
         "title": "Samsung-apparaat toevoegen",
         "description": "Voer het IP-adres van je Samsung-apparaat in. De CA-inloggegevens van een bestaand LocalThings-apparaat worden hergebruikt.",
         "data": {
-          "host": "IP-adres"
+          "host": "IP-adres",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Het lokale IP-adres van je Samsung-apparaat (bijvoorbeeld 192.168.1.50)."
@@ -2411,6 +2421,16 @@
         "data": {
           "device_token": "Apparaattoken (leeg laten om er een aan te vragen)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2438,7 +2458,11 @@
       "invalid_token": "Het apparaat heeft dat token geweigerd. Laat het veld leeg om een nieuw token aan te vragen.",
       "callback_port_in_use": "Poort 8889 is al in gebruik op Home Assistant, meestal door een tokenaanvraag die nog wacht. Probeer het over anderhalve minuut opnieuw.",
       "callback_cert_rejected": "Het apparaat belde terug op poort 8889, maar weigerde het zelfondertekende certificaat van Home Assistant. Plak het AC14K_M-CA-certificaat en de sleutel zodat LocalThings er een kan ondertekenen dat wel wordt geaccepteerd; daarna wordt de tokenaanvraag opnieuw uitgevoerd.",
-      "callback_ca_rejected": "Het apparaat belde terug op poort 8889, maar weigerde ook het met AC14K_M ondertekende certificaat. Plak een token dat je op een andere manier hebt verkregen; de handshakefout staat in het Home Assistant-logboek."
+      "callback_ca_rejected": "Het apparaat belde terug op poort 8889, maar weigerde ook het met AC14K_M ondertekende certificaat. Plak een token dat je op een andere manier hebt verkregen; de handshakefout staat in het Home Assistant-logboek.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "Apparaat is al geconfigureerd",
@@ -2449,7 +2473,9 @@
       "reauth_unsupported": "Dit apparaat heeft hier geen inloggegevens om te vernieuwen. Reageert het niet meer, verwijder het dan en voeg het opnieuw toe."
     },
     "progress": {
-      "legacy_token": "Wachten tot {host} een apparaattoken naar Home Assistant stuurt op poort 8889. Dit duurt tot anderhalve minuut."
+      "legacy_token": "Wachten tot {host} een apparaattoken naar Home Assistant stuurt op poort 8889. Dit duurt tot anderhalve minuut.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {

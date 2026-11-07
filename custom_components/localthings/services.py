@@ -137,6 +137,8 @@ def _resolve_target(
         )
 
     for coordinator in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(coordinator, LocalThingsCoordinator):
+            continue
         if device.identifiers & coordinator.device_info.get("identifiers", set()):
             return coordinator, MAIN, device_id
         for sub in coordinator.subdevices:

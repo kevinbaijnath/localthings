@@ -5,19 +5,35 @@ from __future__ import annotations
 import inspect
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 from homeassistant import const as ha_const
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigFlowContext
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_DEVICE_TYPE, CONF_HOST, CONF_PORT, CONF_SERIAL, DOMAIN, PLATFORMS
+from .const import (
+    CONF_DEVICE_KEY,
+    CONF_DEVICE_TYPE,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_MODEL,
+    CONF_PORT,
+    CONF_SERIAL,
+    CONF_TRANSPORT,
+    CONF_TV_POWER_TOKEN,
+    CONF_TV_TOKEN,
+    DOMAIN,
+    PLATFORMS,
+    TRANSPORT_TV_WS,
+    TV_PLATFORMS,
+)
 from .coordinator import (
     LocalThingsCoordinator,
     disabled_subdevice_keys,
@@ -32,6 +48,8 @@ from .registry.identity import resolve_serial
 from .registry.subdevices import MAIN
 from .rekey import rekey_entry
 from .services import async_setup_services
+from .tv import TvIdentity
+from .tv_coordinator import TvCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -410,6 +428,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry re-keyed onto a UUID and then loaded by a release that reads
     CONF_SERIAL as the key would silently orphan every entity it has.
     """
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        return entry.version == 4
+
     if entry.version > 4:
         return False  # downgrade: this release doesn't know the newer shape
 
@@ -455,6 +476,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        return await _async_setup_tv_entry(hass, entry)
 
     # Before the platforms register anything, so an upgraded dryer never has
     # the dead sensor row and its replacement select alive at the same time.
@@ -544,8 +567,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_setup_tv_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if not entry.data.get(CONF_TV_POWER_TOKEN):
+        entry.async_start_reauth_if_available(
+            hass, context=cast(ConfigFlowContext, {"tv_auth_channel": "power"})
+        )
+        raise ConfigEntryAuthFailed("TV power authorization is required")
+    coordinator = TvCoordinator(
+        hass,
+        async_get_clientsession(hass),
+        host=entry.data[CONF_HOST],
+        token=entry.data[CONF_TV_TOKEN],
+        power_token=entry.data[CONF_TV_POWER_TOKEN],
+        identity=TvIdentity(
+            entry.data[CONF_DEVICE_KEY], entry.data[CONF_MODEL], entry.data.get(CONF_MAC)
+        ),
+        config_entry=entry,
+    )
+    try:
+        await coordinator.async_config_entry_first_refresh()
+        hass.data[DOMAIN][entry.entry_id] = coordinator
+        await hass.config_entries.async_forward_entry_setups(entry, TV_PLATFORMS)
+    except BaseException:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        await coordinator.async_close()
+        raise
+    return True
+
+
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """React to an options-flow save (see async_setup_entry)."""
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        return
     coordinator: LocalThingsCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None:
         return
@@ -584,6 +637,8 @@ async def async_remove_config_entry_device(
     coordinator: LocalThingsCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None:
         return True  # entry not loaded -- nothing claims this device
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        return (DOMAIN, f"tv_{entry.data[CONF_DEVICE_KEY]}") not in device.identifiers
     live = set(coordinator.device_info.get("identifiers") or set())
     for subdevice in coordinator.subdevices:
         live |= set(coordinator.device_info_for(subdevice).get("identifiers") or set())
@@ -598,12 +653,15 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     appliance mints a new one and the old file would linger in .storage
     forever.
     """
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        return
     await snapshot_store(hass, entry).async_remove()
     await mode_spec_store(hass, entry).async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    platforms = TV_PLATFORMS if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS else PLATFORMS
+    unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unloaded:
         coordinator: LocalThingsCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.async_close()

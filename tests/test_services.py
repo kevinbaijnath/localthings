@@ -1564,3 +1564,82 @@ async def test_notifications_past_the_cap_are_counted_not_kept(hass, coordinator
 
     assert [n["rep"] for n in response["notifications"]] == [{"n": 0}, {"n": 1}]
     assert response["truncated"] is True
+
+
+@pytest.mark.parametrize("tv_first", [True, False])
+@pytest.mark.parametrize(
+    "service,data",
+    [
+        ("read_resource", {}),
+        ("write_resource", {"writes": [{"href": "/test", "payload": {"value": 1}}]}),
+        ("observe_resource", {"href": "/test", "duration": 1}),
+        ("start_cooking", {}),
+    ],
+)
+async def test_mixed_tv_entries_skip_appliance_fields(
+    hass, coordinator, device_id, tv_first, service, data
+):
+    """Every appliance action works in either load order and rejects a TV."""
+
+    class TvWithoutApplianceFields:
+        pass
+
+    tv_entry = MockConfigEntry(
+        domain=DOMAIN, data={"transport": "tv_ws"}, unique_id="tv-service-test"
+    )
+    tv_entry.add_to_hass(hass)
+    tv_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=tv_entry.entry_id, identifiers={(DOMAIN, "tv_service-test")}
+    )
+    tv = TvWithoutApplianceFields()
+    appliance_entries = dict(hass.data[DOMAIN])
+    hass.data[DOMAIN] = (
+        {tv_entry.entry_id: tv, **appliance_entries}
+        if tv_first
+        else {**appliance_entries, tv_entry.entry_id: tv}
+    )
+    coordinator.async_raw_read = AsyncMock(return_value=(0x45, {}, None))
+    coordinator.async_raw_write_sequence = AsyncMock(
+        return_value={
+            "results": [
+                {
+                    "href": "/test",
+                    "code": "2.04",
+                    "raw_code": 0x44,
+                    "accepted": True,
+                    "response_body": None,
+                    "before": {},
+                    "readback": True,
+                    "after": {},
+                    "changed": False,
+                }
+            ]
+        }
+    )
+    coordinator.async_observe_resource = AsyncMock(
+        return_value={
+            "get": (0x45, {}, None),
+            "notifications": [],
+            "already_observed": False,
+            "session_dropped": False,
+            "truncated": False,
+        }
+    )
+    coordinator.async_start_cooking = AsyncMock()
+    await hass.services.async_call(
+        DOMAIN,
+        service,
+        data,
+        target={"device_id": device_id},
+        blocking=True,
+        return_response=service != "start_cooking",
+    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            service,
+            data,
+            target={"device_id": tv_device.id},
+            blocking=True,
+            return_response=service != "start_cooking",
+        )

@@ -98,6 +98,7 @@ This codebase works out undocumented device APIs, so a comment that records why 
 ## Commits
 
 - **The author and committer must be the person accountable for the change.** Never use a tool, bot or AI agent identity, even when an AI coding agent drafted or applied the change. Set both the author and committer to that person's real name and email before committing. This rule is about whose name goes on the change. The identity comes from whoever is responsible for the work in each session, the same as if they had run `git commit` themselves. Don't copy a name from this file.
+- **Automatic upstream merges in this fork are the sole exception to the identity rule above.** GitHub's final automatic pull-request merge may use the GitHub Actions identity after all required checks pass. The normal author and committer rule applies to every other commit.
 - **No co-author trailers for AI tools or assistants.** Don't add `Co-Authored-By` lines, or any similar attribution, crediting an AI agent, assistant or tool that helped produce the change. The commit belongs entirely to the accountable person.
 
 ## For AI coding agents

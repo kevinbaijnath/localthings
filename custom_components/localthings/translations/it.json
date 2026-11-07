@@ -2244,6 +2244,9 @@
       },
       "repeated_cleaning": {
         "name": "Ripeti pulizia"
+      },
+      "tv_art_mode": {
+        "name": "Art Mode"
       }
     },
     "time": {
@@ -2299,6 +2302,11 @@
           }
         }
       }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
+      }
     }
   },
   "config": {
@@ -2307,7 +2315,8 @@
         "title": "Aggiungi un elettrodomestico Samsung",
         "description": "Inserisci l'indirizzo IP del tuo dispositivo Samsung. LocalThings lo configura automaticamente con un certificato autofirmato: la maggior parte dei dispositivi non richiede altro.",
         "data": {
-          "host": "Indirizzo IP"
+          "host": "Indirizzo IP",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Indirizzo IP locale del tuo dispositivo Samsung (ad esempio 192.168.1.50)."
@@ -2317,7 +2326,8 @@
         "title": "Aggiungi un elettrodomestico Samsung",
         "description": "Inserisci l'indirizzo IP del tuo dispositivo Samsung. Le credenziali CA di un dispositivo LocalThings esistente verranno riutilizzate.",
         "data": {
-          "host": "Indirizzo IP"
+          "host": "Indirizzo IP",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Indirizzo IP locale del tuo dispositivo Samsung (ad esempio 192.168.1.50)."
@@ -2411,6 +2421,16 @@
         "data": {
           "device_token": "Token del dispositivo (lascia vuoto per richiederne uno)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2438,7 +2458,11 @@
       "invalid_token": "L'apparecchio ha rifiutato quel token. Lascia vuoto il campo per richiederne uno nuovo.",
       "callback_port_in_use": "La porta 8889 è già in uso su Home Assistant, di solito da una richiesta di token ancora in attesa. Riprova tra un minuto e mezzo.",
       "callback_cert_rejected": "L'elettrodomestico ha risposto sulla porta 8889 ma ha rifiutato il certificato autofirmato di Home Assistant. Incolla il certificato e la chiave della CA AC14K_M perché LocalThings ne firmi uno accettato; poi la richiesta del token verrà ripetuta.",
-      "callback_ca_rejected": "L'elettrodomestico ha risposto sulla porta 8889 ma ha rifiutato anche il certificato firmato con AC14K_M. Incolla un token ottenuto in altro modo e controlla il log di Home Assistant per l'errore di handshake."
+      "callback_ca_rejected": "L'elettrodomestico ha risposto sulla porta 8889 ma ha rifiutato anche il certificato firmato con AC14K_M. Incolla un token ottenuto in altro modo e controlla il log di Home Assistant per l'errore di handshake.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "Il dispositivo è già configurato",
@@ -2449,7 +2473,9 @@
       "reauth_unsupported": "Questo apparecchio non ha credenziali da rinnovare qui. Se ha smesso di rispondere, rimuovilo e aggiungilo di nuovo."
     },
     "progress": {
-      "legacy_token": "In attesa che {host} invii un token del dispositivo a Home Assistant sulla porta 8889. Richiede fino a un minuto e mezzo."
+      "legacy_token": "In attesa che {host} invii un token del dispositivo a Home Assistant sulla porta 8889. Richiede fino a un minuto e mezzo.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {
