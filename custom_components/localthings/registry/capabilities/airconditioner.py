@@ -12,6 +12,7 @@ capabilities/__init__.py) -- AC-only, by_type registry only.
 import math
 from dataclasses import replace
 
+from .. import usagedb
 from ..capability import Capability
 from ..entities import (
     BinarySensorDesc,
@@ -373,6 +374,23 @@ ENERGY_METER_GENERIC = replace(
     match_fn=lambda rep, resources: not is_legacy_board(resources),
 )
 
+# The usage file's energy field is plain Wh on every AC measured, not the
+# tenths of a kWh the shared capability assumes (see
+# usagedb.cumulative_energy_kwh_from_wh).
+FILE_TRANSFER = replace(
+    common.FILE_TRANSFER,
+    entities=tuple(
+        replace(
+            e,
+            rep_fn=usagedb.cumulative_energy_kwh_from_wh,
+            exists_fn=common.usage_energy_exists(usagedb.cumulative_energy_kwh_from_wh),
+        )
+        if e.key == "energy_kwh"
+        else e
+        for e in common.FILE_TRANSFER.entities
+    ),
+)
+
 
 def _has_option_token(prefix):
     return lambda rep, resources: (
@@ -660,6 +678,7 @@ CLIMATE = Capability(
             translation_key="airconditioner",
             rep_fn=_first_mode,
             write_fn=_climate_write,
+            confirm_on_refusal=True,
         ),
         # Purification/Ventilation/SmartVentilation mode select (PR #316) --
         # _is_ventilation_mode_device gates this to devices using that

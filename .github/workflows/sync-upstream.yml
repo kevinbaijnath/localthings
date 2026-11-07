@@ -1,0 +1,35 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * 0"
+
+permissions: {}
+
+concurrency:
+  group: localthings-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      github.repository == 'kevinbaijnath/localthings' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
+    steps:
+      - name: Checkout the trusted controller
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Merge, validate and promote one upstream candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/sync_upstream.py

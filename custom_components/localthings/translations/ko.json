@@ -174,6 +174,12 @@
       },
       "woofer_connection": {
         "name": "우퍼 연결"
+      },
+      "lamp": {
+        "name": "램프"
+      },
+      "energy_saving": {
+        "name": "절전"
       }
     },
     "button": {
@@ -981,6 +987,8 @@
         "name": "코스",
         "state": {
           "01": "표준세탁",
+          "50": "면 건조",
+          "51": "합성섬유 건조",
           "55": "흰옷",
           "57": "통세척+",
           "5b": "면",
@@ -1020,6 +1028,8 @@
           "ab": "에코 냉수 세탁",
           "b1": "통세척+",
           "ba": "배수/탈수",
+          "c7": "에코 통세척",
+          "ca": "에어워시",
           "d0": "면",
           "d1": "에코 면",
           "d2": "합성섬유",
@@ -1032,7 +1042,9 @@
           "da": "초절약세탁",
           "db": "쾌속세탁",
           "dc": "15분 쾌속세탁",
-          "e4": "알레르기 케어"
+          "e3": "데일리 세탁",
+          "e4": "알레르기 케어",
+          "e7": "스피드 세탁+건조"
         }
       },
       "washer_cycle_table_02": {
@@ -1939,6 +1951,9 @@
       },
       "robot_movement": {
         "name": "이동"
+      },
+      "oven_setpoint": {
+        "name": "설정 온도"
       }
     },
     "switch": {
@@ -2229,6 +2244,9 @@
       },
       "repeated_cleaning": {
         "name": "반복 청소"
+      },
+      "tv_art_mode": {
+        "name": "Art Mode"
       }
     },
     "time": {
@@ -2284,6 +2302,11 @@
           }
         }
       }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
+      }
     }
   },
   "config": {
@@ -2292,7 +2315,8 @@
         "title": "삼성 가전제품 추가",
         "description": "삼성 가전제품의 IP 주소를 입력하세요. LocalThings가 자체 서명 인증서로 자동으로 설정하며, 대부분의 가전제품은 그 외에 아무것도 필요하지 않습니다.",
         "data": {
-          "host": "IP 주소"
+          "host": "IP 주소",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "삼성 가전제품의 로컬 IP 주소입니다(예: 192.168.1.50)."
@@ -2302,7 +2326,8 @@
         "title": "삼성 가전제품 추가",
         "description": "삼성 가전제품의 IP 주소를 입력하세요. 기존 LocalThings 가전제품의 CA 인증 정보를 다시 사용합니다.",
         "data": {
-          "host": "IP 주소"
+          "host": "IP 주소",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "삼성 가전제품의 로컬 IP 주소입니다(예: 192.168.1.50)."
@@ -2396,6 +2421,16 @@
         "data": {
           "device_token": "기기 토큰 (비워 두면 새로 요청)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2423,7 +2458,11 @@
       "invalid_token": "가전제품이 해당 기기 토큰을 거부했습니다. 새 토큰을 요청하려면 칸을 비워 두세요.",
       "callback_port_in_use": "Home Assistant의 포트 8889가 이미 사용 중입니다. 보통 아직 대기 중인 토큰 요청 때문입니다. 1분 30초 후에 다시 시도하세요.",
       "callback_cert_rejected": "가전이 포트 8889로 콜백했지만 Home Assistant의 자체 서명 인증서를 거부했습니다. LocalThings가 기기가 받아들일 인증서에 서명할 수 있도록 AC14K_M CA 인증서와 키를 붙여 넣으세요. 그러면 토큰 요청이 다시 실행됩니다.",
-      "callback_ca_rejected": "가전이 포트 8889로 콜백했지만 AC14K_M으로 서명된 인증서도 거부했습니다. 다른 방법으로 얻은 토큰을 붙여 넣고, 핸드셰이크 오류는 Home Assistant 로그에서 확인하세요."
+      "callback_ca_rejected": "가전이 포트 8889로 콜백했지만 AC14K_M으로 서명된 인증서도 거부했습니다. 다른 방법으로 얻은 토큰을 붙여 넣고, 핸드셰이크 오류는 Home Assistant 로그에서 확인하세요.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "기기가 이미 구성되어 있습니다",
@@ -2434,7 +2473,9 @@
       "reauth_unsupported": "이 가전제품에는 여기서 갱신할 자격 증명이 없습니다. 응답하지 않으면 제거한 뒤 다시 추가하세요."
     },
     "progress": {
-      "legacy_token": "{host}이(가) 포트 8889로 Home Assistant에 기기 토큰을 보내기를 기다리는 중입니다. 최대 1분 30초가 걸립니다."
+      "legacy_token": "{host}이(가) 포트 8889로 Home Assistant에 기기 토큰을 보내기를 기다리는 중입니다. 최대 1분 30초가 걸립니다.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {

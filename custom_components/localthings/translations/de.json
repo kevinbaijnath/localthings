@@ -174,6 +174,12 @@
       },
       "woofer_connection": {
         "name": "Woofer-Verbindung"
+      },
+      "lamp": {
+        "name": "Lampe"
+      },
+      "energy_saving": {
+        "name": "Energiesparen"
       }
     },
     "button": {
@@ -944,6 +950,8 @@
         "name": "Programm",
         "state": {
           "01": "Normal",
+          "50": "Trocknen Baumwolle",
+          "51": "Trocknen Pflegeleicht",
           "55": "Weißwäsche",
           "57": "Selbstreinigung+",
           "5b": "Baumwolle",
@@ -983,6 +991,8 @@
           "ab": "Eco Kalt",
           "b1": "Selbstreinigung+",
           "ba": "Abpumpen + Schleudern",
+          "c7": "Eco-Trommelreinigung",
+          "ca": "Air Wash",
           "d0": "Baumwolle",
           "d1": "Eco Baumwolle",
           "d2": "Pflegeleicht",
@@ -995,7 +1005,9 @@
           "da": "Super Eco",
           "db": "Super Speed",
           "dc": "Schnelle Wäsche 15'",
-          "e4": "Anti-Allergie"
+          "e3": "Tägliche Wäsche",
+          "e4": "Anti-Allergie",
+          "e7": "Schnell Waschen + Trocknen"
         }
       },
       "washer_cycle_table_02": {
@@ -1939,6 +1951,9 @@
       },
       "robot_movement": {
         "name": "Bewegung"
+      },
+      "oven_setpoint": {
+        "name": "Sollwert"
       }
     },
     "switch": {
@@ -2229,6 +2244,9 @@
       },
       "repeated_cleaning": {
         "name": "Reinigung wiederholen"
+      },
+      "tv_art_mode": {
+        "name": "Art Mode"
       }
     },
     "time": {
@@ -2284,6 +2302,11 @@
           }
         }
       }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
+      }
     }
   },
   "config": {
@@ -2292,7 +2315,8 @@
         "title": "Samsung-Gerät hinzufügen",
         "description": "Geben Sie die IP-Adresse Ihres Samsung-Geräts ein. LocalThings richtet es automatisch mit einem selbstsignierten Zertifikat ein – die meisten Geräte benötigen nichts weiter.",
         "data": {
-          "host": "IP-Adresse"
+          "host": "IP-Adresse",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Lokale IP-Adresse Ihres Samsung-Geräts (z. B. 192.168.1.50)."
@@ -2302,7 +2326,8 @@
         "title": "Samsung-Gerät hinzufügen",
         "description": "Geben Sie die IP-Adresse Ihres Samsung-Geräts ein. Die CA-Zugangsdaten eines bereits vorhandenen LocalThings-Geräts werden wiederverwendet.",
         "data": {
-          "host": "IP-Adresse"
+          "host": "IP-Adresse",
+          "device_kind": "Device type"
         },
         "data_description": {
           "host": "Lokale IP-Adresse Ihres Samsung-Geräts (z. B. 192.168.1.50)."
@@ -2396,6 +2421,16 @@
         "data": {
           "device_token": "Gerätetoken (leer lassen, um eines anzufordern)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2423,7 +2458,11 @@
       "invalid_token": "Das Gerät hat dieses Gerätetoken abgelehnt. Lassen Sie das Feld leer, um ein neues anzufordern.",
       "callback_port_in_use": "Port 8889 ist auf Home Assistant bereits belegt, meist durch eine noch wartende Token-Anfrage. Versuchen Sie es in anderthalb Minuten erneut.",
       "callback_cert_rejected": "Das Gerät hat sich auf Port 8889 zurückgemeldet, aber das selbstsignierte Zertifikat von Home Assistant abgelehnt. Fügen Sie das AC14K_M-CA-Zertifikat und den Schlüssel ein, damit LocalThings ein akzeptiertes Zertifikat signieren kann; die Token-Anfrage wird dann erneut ausgeführt.",
-      "callback_ca_rejected": "Das Gerät hat sich auf Port 8889 zurückgemeldet, aber auch das mit AC14K_M signierte Zertifikat abgelehnt. Fügen Sie ein auf anderem Weg beschafftes Token ein; der genaue Handshake-Fehler steht im Home Assistant-Protokoll."
+      "callback_ca_rejected": "Das Gerät hat sich auf Port 8889 zurückgemeldet, aber auch das mit AC14K_M signierte Zertifikat abgelehnt. Fügen Sie ein auf anderem Weg beschafftes Token ein; der genaue Handshake-Fehler steht im Home Assistant-Protokoll.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "Gerät ist bereits konfiguriert",
@@ -2434,7 +2473,9 @@
       "reauth_unsupported": "Für dieses Gerät gibt es hier keine Zugangsdaten zu erneuern. Wenn es nicht mehr antwortet, entfernen Sie es und fügen Sie es erneut hinzu."
     },
     "progress": {
-      "legacy_token": "Warte darauf, dass {host} ein Gerätetoken an Home Assistant auf Port 8889 sendet. Das dauert bis zu anderthalb Minuten."
+      "legacy_token": "Warte darauf, dass {host} ein Gerätetoken an Home Assistant auf Port 8889 sendet. Das dauert bis zu anderthalb Minuten.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {

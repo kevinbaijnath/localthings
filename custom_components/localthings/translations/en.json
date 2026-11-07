@@ -174,6 +174,12 @@
       },
       "woofer_connection": {
         "name": "Woofer connection"
+      },
+      "lamp": {
+        "name": "Lamp"
+      },
+      "energy_saving": {
+        "name": "Energy saving"
       }
     },
     "button": {
@@ -387,6 +393,11 @@
       },
       "woofer_level": {
         "name": "Woofer level"
+      }
+    },
+    "remote": {
+      "tv_remote": {
+        "name": "Remote"
       }
     },
     "select": {
@@ -981,6 +992,8 @@
         "name": "Cycle",
         "state": {
           "01": "Normal",
+          "50": "Cotton Dry",
+          "51": "Synthetics Dry",
           "55": "Whites",
           "57": "Self Clean+",
           "5b": "Cotton",
@@ -1020,6 +1033,8 @@
           "ab": "Eco Cold",
           "b1": "Self Clean+",
           "ba": "Drain/Spin",
+          "c7": "Eco Drum Clean",
+          "ca": "Air Wash",
           "d0": "Cotton",
           "d1": "E Cotton",
           "d2": "Synthetics",
@@ -1032,7 +1047,9 @@
           "da": "Super Eco Wash",
           "db": "Super Speed",
           "dc": "15' Quick Wash",
-          "e4": "Anti Allergen"
+          "e3": "Daily Wash",
+          "e4": "Anti Allergen",
+          "e7": "Speed Wash+Dry"
         }
       },
       "washer_cycle_table_02": {
@@ -1939,9 +1956,15 @@
       },
       "robot_movement": {
         "name": "Movement"
+      },
+      "oven_setpoint": {
+        "name": "Setpoint"
       }
     },
     "switch": {
+      "tv_art_mode": {
+        "name": "Art Mode"
+      },
       "night_lighting_schedule": {
         "name": "Night lighting schedule"
       },
@@ -2289,23 +2312,25 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add Samsung appliance",
-        "description": "Enter the IP address of your Samsung appliance. LocalThings sets it up automatically with a self-signed certificate — most appliances need nothing else.",
+        "title": "Add Samsung device",
+        "description": "Enter the local IP address and select the device type. Appliance setup uses certificates. Samsung Frame TV setup asks you to approve access on the TV.",
         "data": {
-          "host": "IP address"
+          "host": "IP address",
+          "device_kind": "Device type"
         },
         "data_description": {
-          "host": "Local IP address of your Samsung appliance (e.g. 192.168.1.50)."
+          "host": "Local IP address of your Samsung device."
         }
       },
       "user_reuse": {
-        "title": "Add Samsung appliance",
-        "description": "Enter the IP address of your Samsung appliance. The CA credentials from an existing LocalThings appliance will be reused.",
+        "title": "Add Samsung device",
+        "description": "Enter the local IP address and select the device type. Appliance setup uses certificates. Samsung Frame TV setup asks you to approve access on the TV.",
         "data": {
-          "host": "IP address"
+          "host": "IP address",
+          "device_kind": "Device type"
         },
         "data_description": {
-          "host": "Local IP address of your Samsung appliance (e.g. 192.168.1.50)."
+          "host": "Local IP address of your Samsung device."
         }
       },
       "credential": {
@@ -2370,13 +2395,13 @@
         }
       },
       "reconfigure": {
-        "title": "Change appliance address",
-        "description": "Enter the appliance's current IP address. Everything else about this device stays as it is — its entities, history and automations are kept.",
+        "title": "Change device address",
+        "description": "Enter the current IP address of the device. Its entities, history and automations are kept.",
         "data": {
           "host": "IP address"
         },
         "data_description": {
-          "host": "Local IP address of your Samsung appliance (e.g. 192.168.1.50)."
+          "host": "New local IP address of the same Samsung device."
         }
       },
       "confirm_unknown_type": {
@@ -2396,6 +2421,16 @@
         "data": {
           "device_token": "Device token (leave empty to request one)"
         }
+      },
+      "tv_pair": {
+        "title": "Pair Samsung Frame TV",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings on the TV.",
+        "data": {}
+      },
+      "tv_power_pair": {
+        "title": "Allow TV power control",
+        "description": "Turn on the TV at {host}. Select Submit, then approve LocalThings power access on the TV. This permission is separate from Art Mode and remote access.",
+        "data": {}
       }
     },
     "error": {
@@ -2415,26 +2450,32 @@
       "handshake_failed": "The appliance refused the DTLS handshake for a reason unrelated to the certificate, most likely a protocol or cipher mismatch. The Home Assistant log records the exact alert it sent.",
       "cloud_unreachable": "Couldn't reach Samsung's cloud gateway to fetch the UUID needed to mint this device's certificate. Check Home Assistant's internet access and try again.",
       "unexpected_response": "Connected to the device successfully, but it didn't return a usable device description. It may not be an appliance this integration supports. The Home Assistant log records what it sent.",
-      "cannot_connect": "Cannot connect to the device. Check that the IP address is correct and the appliance is switched on and connected to your network.",
+      "cannot_connect": "Cannot connect to the device. Check that the IP address is correct and the device is switched on and connected to your network.",
       "invalid_ca": "The CA certificate or private key could not be loaded. Verify the PEM contents are correct and the key matches the certificate.",
       "unknown": "Unexpected error. Check the Home Assistant logs for details.",
-      "wrong_device": "A Samsung appliance answered at that address, but it isn't this one — it reported a different identity. Check the address belongs to this appliance. To add the other one, use Add device instead.",
+      "wrong_device": "A Samsung device answered at that address, but it reported a different identity. Check the address belongs to this device. To add the other one, use Add device.",
       "token_not_received": "No device token arrived. Check that Remote Control is on at the appliance with the door closed, and that it can reach Home Assistant on port 8889 - or paste a token you obtained another way.",
       "invalid_token": "The appliance rejected that device token. Leave the field empty to request a new one.",
       "callback_port_in_use": "Port 8889 is already in use on Home Assistant, usually by a token request still waiting. Try again in a minute and a half.",
       "callback_cert_rejected": "The appliance called back on port 8889 but refused Home Assistant's self-signed certificate. Paste the AC14K_M CA certificate and key so LocalThings can sign one it accepts; the token request then runs again.",
-      "callback_ca_rejected": "The appliance called back on port 8889 but refused the AC14K_M-signed certificate too. Paste a token you obtained another way, and see the Home Assistant log for the handshake error."
+      "callback_ca_rejected": "The appliance called back on port 8889 but refused the AC14K_M-signed certificate too. Paste a token you obtained another way, and see the Home Assistant log for the handshake error.",
+      "tv_pairing_rejected": "The TV rejected access. Submit again and approve LocalThings on the TV.",
+      "tv_pairing_timeout": "The TV did not approve access before the pairing deadline. Turn on the TV and try again.",
+      "tv_power_pairing_rejected": "The TV rejected power access. Submit again and approve LocalThings on the TV.",
+      "tv_power_pairing_incomplete": "Power access did not complete. Turn on the TV, then submit again and approve LocalThings on the TV."
     },
     "abort": {
       "already_configured": "Device is already configured",
       "already_in_progress": "Configuration flow is already in progress",
       "reconfigure_successful": "Address updated",
       "no_entry_for_mac": "No configured appliance stores that MAC address",
-      "reauth_successful": "The new device token works; the appliance is reconnecting.",
+      "reauth_successful": "The new device token works. The device is reconnecting.",
       "reauth_unsupported": "This appliance has no credential to renew here. If it stopped answering, remove and re-add it."
     },
     "progress": {
-      "legacy_token": "Waiting for {host} to send a device token to Home Assistant on port 8889. This takes up to a minute and a half."
+      "legacy_token": "Waiting for {host} to send a device token to Home Assistant on port 8889. This takes up to a minute and a half.",
+      "tv_pairing": "Approve LocalThings on the TV at {host}.",
+      "tv_power_pairing": "Approve LocalThings power access on the TV at {host}."
     }
   },
   "options": {

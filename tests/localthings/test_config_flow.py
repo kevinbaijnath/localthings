@@ -1264,7 +1264,9 @@ def test_every_error_key_the_flow_can_raise_has_a_message() -> None:
     source = Path(config_flow.__file__).read_text()
     keys |= set(re.findall(r'errors\["base"\] = "(\w+)"', source))
     keys |= set(re.findall(r'errors\[CONF_\w+\] = "(\w+)"', source))
-    keys |= set(re.findall(r'_legacy_token_form\(\{"base": "(\w+)"\}\)', source))
+    keys |= set(
+        re.findall(r'_(?:legacy_token|tv_(?:power_)?pair)_form\(\{"base": "(\w+)"\}\)', source)
+    )
 
     catalog = json.loads(
         (

@@ -17,17 +17,31 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from . import cloudcourse
-from .const import CONF_OCF_DEVICE_ID, CONF_READ_MODE, DOMAIN
+from .const import CONF_OCF_DEVICE_ID, CONF_READ_MODE, CONF_TRANSPORT, DOMAIN, TRANSPORT_TV_WS
 from .coordinator import LocalThingsCoordinator
 from .registry.capabilities.laundry import cycle_options
 from .registry.encode import json_safe
 from .registry.redact import redact_resources
 from .registry.subdevices import MAIN
+from .tv_coordinator import TvCoordinator
 
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
+    if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        tv: TvCoordinator = hass.data[DOMAIN][entry.entry_id]
+        return {
+            "transport": TRANSPORT_TV_WS,
+            "model": tv.identity.model,
+            "connected": tv.connected,
+            "connection": tv.connection_diagnostics,
+            "state": {
+                "mode": tv.state.mode.value,
+                "art_mode": tv.state.art_mode,
+                "muted": tv.state.muted,
+            },
+        }
     coordinator: LocalThingsCoordinator = hass.data[DOMAIN][entry.entry_id]
     integration = await async_get_integration(hass, DOMAIN)
 

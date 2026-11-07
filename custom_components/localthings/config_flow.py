@@ -21,6 +21,7 @@ from homeassistant import config_entries
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.selector import (
     NumberSelector,
@@ -52,6 +53,7 @@ from .const import (
     CONF_CA_KEY_PEM,
     CONF_CLOUD_COURSES_ENABLED,
     CONF_DEVICE_KEY,
+    CONF_DEVICE_KIND,
     CONF_DEVICE_TOKEN,
     CONF_DEVICE_TYPE,
     CONF_DISABLED_SUBDEVICES,
@@ -72,6 +74,8 @@ from .const import (
     CONF_READ_MODE,
     CONF_SERIAL,
     CONF_TRANSPORT,
+    CONF_TV_POWER_TOKEN,
+    CONF_TV_TOKEN,
     DEFAULT_CLOUD_COURSES_ENABLED,
     DEFAULT_FINISH_TIME_HYSTERESIS_MINUTES,
     DEFAULT_LEARN_MODES,
@@ -85,6 +89,7 @@ from .const import (
     READ_MODE_PER_HREF,
     SERVICE_WRITE_RESOURCE,
     TRANSPORT_LEGACY_HTTP,
+    TRANSPORT_TV_WS,
 )
 from .credentials import (
     DeviceBinding,
@@ -109,6 +114,15 @@ from .registry.capabilities.laundry import cycle_options, personal_course_labels
 from .registry.subdevices import MAIN
 from .session import psk_provider
 from .transport import AuthRejected, DtlsTransport, local_source_port
+from .tv import (
+    TvClient,
+    TvError,
+    TvIdentity,
+    TvPairingRejected,
+    TvPairingTimeout,
+    async_read_tv_identity,
+)
+from .tv_power import TvPowerAuthorizationIncomplete, TvPowerClient, TvPowerPairingRejected
 
 _TEXT = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
 _MULTILINE = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT, multiline=True))
@@ -1034,6 +1048,10 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 4
 
     def __init__(self) -> None:
+        self._tv_task: asyncio.Task[str] | None = None
+        self._tv_identity: TvIdentity | None = None
+        self._tv_token: str | None = None
+        self._tv_power_token: str | None = None
         self._host: str = ""
         self._ca_cert_pem: str = ""
         self._ca_key_pem: str = ""
@@ -1134,7 +1152,8 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         certificate_entries = [
             entry
             for entry in existing
-            if entry.data.get(CONF_AUTH_CARRIER, AUTH_CERTIFICATE) == AUTH_CERTIFICATE
+            if entry.data.get(CONF_TRANSPORT) != TRANSPORT_TV_WS
+            and entry.data.get(CONF_AUTH_CARRIER, AUTH_CERTIFICATE) == AUTH_CERTIFICATE
         ]
         has_creds = bool(certificate_entries)
 
@@ -1142,6 +1161,8 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._host = user_input[CONF_HOST].strip()
+            if user_input.get(CONF_DEVICE_KIND, "appliance") == "tv":
+                return await self.async_step_tv_pair()
             existing_leaf = None
             if has_creds:
                 # Reuse an existing entry's credentials. Prefer one that has
@@ -1214,10 +1235,20 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 return await self._finish_probe(info, existing)
 
-        # Both the first device and every later one now ask only for the host:
-        # the first tries self-signed, later ones reuse the stored leaf. The
-        # step_id still distinguishes them so their form text can differ.
-        schema = vol.Schema({vol.Required(CONF_HOST): _TEXT})
+        # Keep host-only appliance submissions valid when device type is omitted.
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST): _TEXT,
+                vol.Optional(CONF_DEVICE_KIND, default="appliance"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(value="appliance", label="Appliance"),
+                            SelectOptionDict(value="tv", label="Samsung Frame TV"),
+                        ]
+                    )
+                ),
+            }
+        )
         step_id = "user_reuse" if has_creds else "user"
 
         return self.async_show_form(
@@ -1229,6 +1260,207 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "port": "unknown",
                 **self._error_placeholders,
             },
+        )
+
+    @callback
+    def async_remove(self) -> None:
+        if self._tv_task is not None and not self._tv_task.done():
+            self._tv_task.cancel()
+
+    async def _request_tv_token(self) -> str:
+        def pair() -> str:
+            client = TvClient(self._host, None)
+            try:
+                return client.pair()
+            finally:
+                client.close()
+
+        future = self.hass.async_add_executor_job(pair)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            # A canceled dialog must drain the bounded SDK job before cleanup.
+            while not future.done():
+                try:
+                    await asyncio.shield(future)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not future.cancelled():
+                future.exception()
+            raise
+
+    def _tv_pair_form(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+        return self.async_show_form(
+            step_id="tv_pair",
+            data_schema=vol.Schema({}),
+            errors=errors or {},
+            description_placeholders={"host": self._host},
+        )
+
+    async def async_step_tv_pair(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is None:
+            return self._tv_pair_form()
+        try:
+            identity = await async_read_tv_identity(async_get_clientsession(self.hass), self._host)
+        except TvError:
+            return self._tv_pair_form({"base": "cannot_connect"})
+        if self.source == SOURCE_REAUTH:
+            if identity.device_id != self._get_reauth_entry().data[CONF_DEVICE_KEY]:
+                return self._tv_pair_form({"base": "wrong_device"})
+        else:
+            await self.async_set_unique_id(f"{DOMAIN}_tv_{identity.device_id}")
+            self._abort_if_unique_id_configured()
+        self._tv_identity = identity
+        return await self.async_step_tv_pairing()
+
+    async def async_step_tv_pairing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if self._tv_task is None:
+            self._tv_task = self.hass.async_create_task(self._request_tv_token())
+        if not self._tv_task.done():
+            return self.async_show_progress(
+                step_id="tv_pairing",
+                progress_action="tv_pairing",
+                progress_task=self._tv_task,
+                description_placeholders={"host": self._host},
+            )
+        return self.async_show_progress_done(next_step_id="tv_paired")
+
+    async def async_step_tv_paired(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        task, self._tv_task = self._tv_task, None
+        assert task is not None
+        try:
+            self._tv_token = task.result()
+        except TvPairingRejected:
+            return self._tv_pair_form({"base": "tv_pairing_rejected"})
+        except TvPairingTimeout:
+            return self._tv_pair_form({"base": "tv_pairing_timeout"})
+        except TvError:
+            return self._tv_pair_form({"base": "cannot_connect"})
+        assert self._tv_identity is not None
+        if self.source == SOURCE_REAUTH:
+            return self._update_reload_and_abort(
+                self._get_reauth_entry(), data_updates={CONF_TV_TOKEN: self._tv_token}
+            )
+        return await self.async_step_tv_power_pair()
+
+    def _tv_power_pair_form(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+        return self.async_show_form(
+            step_id="tv_power_pair",
+            data_schema=vol.Schema({}),
+            errors=errors or {},
+            description_placeholders={"host": self._host},
+        )
+
+    async def async_step_tv_power_pair(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is None:
+            return self._tv_power_pair_form()
+        try:
+            identity = await async_read_tv_identity(async_get_clientsession(self.hass), self._host)
+        except TvError:
+            return self._tv_power_pair_form({"base": "cannot_connect"})
+        if self.source == SOURCE_REAUTH:
+            expected = self._get_reauth_entry().data[CONF_DEVICE_KEY]
+        else:
+            assert self._tv_identity is not None
+            expected = self._tv_identity.device_id
+        if identity.device_id != expected:
+            return self._tv_power_pair_form({"base": "wrong_device"})
+        self._tv_identity = identity
+        return await self.async_step_tv_power_pairing()
+
+    async def _request_tv_power_token(self) -> str:
+        client = TvPowerClient(async_get_clientsession(self.hass), self._host, None)
+        return await client.async_pair()
+
+    async def async_step_tv_power_pairing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if self._tv_task is None:
+            self._tv_task = self.hass.async_create_task(self._request_tv_power_token())
+        if not self._tv_task.done():
+            return self.async_show_progress(
+                step_id="tv_power_pairing",
+                progress_action="tv_power_pairing",
+                progress_task=self._tv_task,
+                description_placeholders={"host": self._host},
+            )
+        return self.async_show_progress_done(next_step_id="tv_power_paired")
+
+    async def async_step_tv_power_paired(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        task, self._tv_task = self._tv_task, None
+        assert task is not None
+        try:
+            self._tv_power_token = task.result()
+        except TvPowerPairingRejected:
+            return self._tv_power_pair_form({"base": "tv_power_pairing_rejected"})
+        except TvPowerAuthorizationIncomplete:
+            return self._tv_power_pair_form({"base": "tv_power_pairing_incomplete"})
+        except TvError:
+            return self._tv_power_pair_form({"base": "cannot_connect"})
+        if self.source == SOURCE_REAUTH:
+            return self._update_reload_and_abort(
+                self._get_reauth_entry(), data_updates={CONF_TV_POWER_TOKEN: self._tv_power_token}
+            )
+        return self._create_tv_entry()
+
+    def _create_tv_entry(self) -> ConfigFlowResult:
+        assert self._tv_identity is not None and self._tv_token is not None
+        assert self._tv_power_token is not None
+        return self.async_create_entry(
+            title=f"Samsung Frame TV ({self._host})",
+            data={
+                CONF_HOST: self._host,
+                CONF_PORT: 8002,
+                CONF_TRANSPORT: TRANSPORT_TV_WS,
+                CONF_TV_TOKEN: self._tv_token,
+                CONF_TV_POWER_TOKEN: self._tv_power_token,
+                CONF_DEVICE_KEY: self._tv_identity.device_id,
+                CONF_MODEL: self._tv_identity.model,
+                **({CONF_MAC: self._tv_identity.mac} if self._tv_identity.mac else {}),
+            },
+        )
+
+    async def _async_reconfigure_tv(
+        self, entry: config_entries.ConfigEntry, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        errors = {}
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            try:
+                identity = await async_read_tv_identity(async_get_clientsession(self.hass), host)
+            except TvError:
+                errors["base"] = "cannot_connect"
+            else:
+                if identity.device_id != entry.data[CONF_DEVICE_KEY]:
+                    errors["base"] = "wrong_device"
+                else:
+                    return self._update_reload_and_abort(
+                        entry,
+                        title=_followed_title(entry, host),
+                        data_updates={
+                            CONF_HOST: host,
+                            **({CONF_MAC: identity.mac} if identity.mac else {}),
+                        },
+                    )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema({vol.Required(CONF_HOST): _TEXT}),
+                user_input or {CONF_HOST: entry.data[CONF_HOST]},
+            ),
+            errors=errors,
         )
 
     async def _finish_probe(
@@ -1507,7 +1739,12 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self._legacy_token_form()
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
-        """The 8888 bridge refused this entry's device token (a 401)."""
+        """Renew a local device token after access was refused."""
+        if entry_data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+            self._host = entry_data[CONF_HOST]
+            if self.context.get("tv_auth_channel") == "power":
+                return await self.async_step_tv_power_pair()
+            return await self.async_step_tv_pair()
         if entry_data.get(CONF_TRANSPORT) != TRANSPORT_LEGACY_HTTP:
             return self.async_abort(reason="reauth_unsupported")
         self._host = entry_data[CONF_HOST]
@@ -1733,6 +1970,8 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         own answer, refreshed by the probe below.
         """
         entry = self._get_reconfigure_entry()
+        if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+            return await self._async_reconfigure_tv(entry, user_input)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -1943,6 +2182,8 @@ class LocalThingsOptionsFlow(config_entries.OptionsFlow):
         return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if self.config_entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+            return self.async_create_entry(title="", data={})
         menu = ["settings", "forget_learned_modes", "debug_write"]
         # Only offered on an appliance that actually advertises downloaded
         # programs (issue #342) -- every other device would get a menu entry

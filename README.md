@@ -47,6 +47,32 @@ Most Samsung appliances from about 2022 onward work, and so do some earlier wash
 
 If an appliance sets up but LocalThings doesn't recognize it, or a control is missing, Home Assistant shows a notice asking for a diagnostics download. That download is usually all the maintainers need to add support. See [Reporting a capability gap](#reporting-a-capability-gap).
 
+## Experimental Samsung Frame TV support in this fork
+
+This fork adds three local Frame TV entities:
+
+| Entity | Controls |
+| --- | --- |
+| Media player | Wake, full power-off, volume up/down, and mute/unmute |
+| Remote | Navigation, playback buttons, channel buttons, and the input menu |
+| Art Mode switch | Enter or leave Art Mode |
+
+The integration distinguishes TV mode, artwork, full power-off, and unknown state. Direct HDMI selection, a volume slider, artwork selection, artwork uploads, and brightness controls are not included.
+
+Select **Samsung Frame TV** during setup and enter its numeric IP address. Initial setup requests separate remote and power permissions. Home Assistant saves both permissions for later connections. Enable **IP Remote** and **Power On with Mobile** on the TV. Menu names can differ by model.
+
+Watched tests on one Frame verified Art Mode on/off, full power-off, wake, mute/unmute, and saved permissions after a Home Assistant restart without another Allow prompt. Earlier tests verified volume steps, navigation, and the input menu. These results do not establish support for every Frame model or long-term reliability.
+
+For Frame support, use this fork's `custom_components/localthings/` files. The HACS instructions below refer to the upstream appliance integration. An upstream installation can replace the fork's TV support. Back up Home Assistant before changing the installed integration.
+
+Maintainers: development tests pin `samsungtvws[async,encrypted]==3.0.7`. The runtime requirement allows Home Assistant to select its supported version, starting at 3.0.7. Review the private SDK hooks before upgrading that library. New TV strings use English fallback text in other language catalogs.
+
+## Weekly fork updates
+
+Each Sunday, a GitHub workflow prepares an upstream merge. It merges the pull request only after Hassfest, HACS, lint/format/type checks, and tests pass on the exact candidate commit. A conflict or failed check stops the update. Main-branch rules require those checks and prevent force-pushes and branch deletion.
+
+The Unraid weekly checklist reports the GitHub result and pending upstream commits. It warns if the latest run is at least 192 hours old. The workflow and checklist do not install updates or restart Home Assistant.
+
 ## Built on open standards
 
 LocalThings uses the standards the appliances implement:
