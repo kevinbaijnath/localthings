@@ -65,7 +65,7 @@ Watched tests on one Frame verified Art Mode on/off, full power-off, wake, mute/
 
 For Frame support, use this fork's `custom_components/localthings/` files. The HACS instructions below refer to the upstream appliance integration. An upstream installation can replace the fork's TV support. Back up Home Assistant before changing the installed integration.
 
-Maintainers: this fork pins `samsungtvws[async,encrypted]==3.0.7`. Review its private SDK hooks before upgrading that library. New TV strings use English fallback text in other language catalogs.
+Maintainers: development tests pin `samsungtvws[async,encrypted]==3.0.7`. The runtime requirement allows Home Assistant to select its supported version, starting at 3.0.7. Review the private SDK hooks before upgrading that library. New TV strings use English fallback text in other language catalogs.
 
 ## Weekly fork updates
 
