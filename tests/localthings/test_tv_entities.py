@@ -16,6 +16,7 @@ from custom_components.localthings.const import DOMAIN
 from custom_components.localthings.tv import FrameMode, TvConnectionError, TvIdentity, TvState
 from custom_components.localthings.tv_coordinator import TvCoordinator
 
+from .test_soundbar import _mock_entry, _setup_soundbar
 from .test_tv_config_flow import IDENTITY, tv_entry
 
 
@@ -67,6 +68,42 @@ async def setup_tv(hass):
         for entry in entries:
             await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+@pytest.mark.parametrize("tv_first", [True, False])
+async def test_tv_and_soundbar_players_coexist_in_either_setup_order(hass, setup_tv, tv_first):
+    if tv_first:
+        _, tv_ids, tv_actions, _ = await setup_tv()
+    soundbar_entry = _mock_entry(hass)
+    session = await _setup_soundbar(hass, soundbar_entry)
+    if not tv_first:
+        _, tv_ids, tv_actions, _ = await setup_tv()
+
+    soundbar_players = [
+        row.entity_id
+        for row in er.async_entries_for_config_entry(er.async_get(hass), soundbar_entry.entry_id)
+        if row.domain == "media_player"
+    ]
+    assert len(soundbar_players) == 1
+    soundbar_id = soundbar_players[0]
+    assert soundbar_id != tv_ids["media_player"]
+    assert hass.states.get(tv_ids["media_player"]).attributes["frame_mode"] == "tv"
+    assert "frame_mode" not in hass.states.get(soundbar_id).attributes
+
+    await hass.services.async_call(
+        "media_player", "volume_up", {"entity_id": tv_ids["media_player"]}, blocking=True
+    )
+    tv_actions["async_send_key"].assert_awaited_once_with("KEY_VOLUP")
+    assert session.writes == []
+    await hass.services.async_call(
+        "media_player",
+        "volume_set",
+        {"entity_id": soundbar_id, "volume_level": 0.42},
+        blocking=True,
+    )
+    assert session.writes == [(["sec", "networkaudio", "audio"], {"volume": 42})]
+    tv_actions["async_send_key"].assert_awaited_once_with("KEY_VOLUP")
+    assert await hass.config_entries.async_unload(soundbar_entry.entry_id)
 
 
 @pytest.mark.parametrize(

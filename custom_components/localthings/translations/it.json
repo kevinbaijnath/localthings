@@ -61,6 +61,18 @@
       "door_open": {
         "name": "Sportello"
       },
+      "door_1_open": {
+        "name": "Sportello 1"
+      },
+      "door_2_open": {
+        "name": "Sportello 2"
+      },
+      "door_3_open": {
+        "name": "Sportello 3"
+      },
+      "door_4_open": {
+        "name": "Sportello 4"
+      },
       "filter_blockage": {
         "name": "Ostruzione del filtro"
       },
@@ -676,6 +688,17 @@
           "very": "Molto"
         }
       },
+      "drying_temperature": {
+        "name": "Temperatura",
+        "state": {
+          "none": "Senza calore",
+          "extra_low": "Molto bassa",
+          "low": "Bassa",
+          "medium_low": "Medio-bassa",
+          "medium": "Media",
+          "high": "Alta"
+        }
+      },
       "favorite_capacity": {
         "name": "Capacità preferita"
       },
@@ -714,7 +737,15 @@
           "cv_fdr_soft_freezer": "Congelatore leggero",
           "fconvert_freezer": "Congelamento",
           "fconvert_fridge": "Refrigerazione",
-          "fconvert_off": "Spento"
+          "fconvert_off": "Spento",
+          "cv_ttype_freezer": "Congelatore",
+          "cv_ttype_soft_freezer": "Congelatore leggero",
+          "cv_ttype_chill": "Raffreddamento",
+          "cv_ttype_cool": "Fresco",
+          "cv_ttype_ferment": "Fermentazione",
+          "cv_ttype_kimchi_warm": "Kimchi, debole",
+          "cv_ttype_kimchi_normal": "Kimchi",
+          "cv_ttype_kimchi_cold": "Kimchi, forte"
         }
       },
       "heated_dry": {
@@ -1714,12 +1745,14 @@
           "idle": "Inattivo",
           "delaywash": "Ritardo di avvio",
           "weightsensing": "Rilevamento del carico",
+          "laundrysensing": "Rilevamento del bucato",
           "wash": "Lavaggio",
           "rinse": "Risciacquo",
           "spin": "Centrifuga",
           "finish": "Completato",
           "steaming": "Vapore",
           "airwashing": "Lavaggio ad aria",
+          "aidrying": "Asciugatura",
           "drying": "Asciugatura",
           "dryingwithdooropen": "Ventilazione",
           "cooling": "Raffreddamento",
@@ -2717,6 +2750,9 @@
     },
     "vacuum_command_params": {
       "message": "I comandi del robot aspirapolvere non accettano parametri."
+    },
+    "media_option_not_supported": {
+      "message": "Il dispositivo non offre questa opzione al momento."
     }
   },
   "selector": {
@@ -2732,6 +2768,7 @@
         "winecellar_bottom": "Zona vino inferiore",
         "door_freezer": "Sportello congelatore",
         "door_cooler": "Sportello frigorifero",
+        "door_fridge": "Sportello frigorifero",
         "door_cvroom": "Sportello zona flessibile",
         "door_winecellar": "Sportello cantinetta",
         "door_onedoorfreezer": "Sportello principale",
