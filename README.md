@@ -36,7 +36,7 @@ LocalThings connects Home Assistant to Samsung washers, dryers, refrigerators, a
 | Air monitor | Range and range hood |
 | Air purifier | Refrigerator, kimchi refrigerator, wine cellar |
 | Cooktop, gas, radiant electric and induction; some models read-only | Robot vacuum, early support |
-| Dehumidifier | Soundbar, settings and status |
+| Dehumidifier | Soundbar, media player, settings and status |
 | Dishwasher | Vacuum clean station |
 | Dryer | Washer and washer-dryer |
 | EHS heat pump | Water purifier |
@@ -71,6 +71,8 @@ Maintainers: development tests pin `samsungtvws[async,encrypted]==3.0.7`. The ru
 
 Each Sunday, a GitHub workflow prepares an upstream merge. It merges the pull request only after Hassfest, HACS, lint/format/type checks, and tests pass on the exact candidate commit. A conflict or failed check stops the update. Main-branch rules require those checks and prevent force-pushes and branch deletion.
 
+Each run reports the known fork and upstream commits, the result, and the next action in its summary. Failed runs identify the failed stage. Merge conflicts list the affected files and stop before pushing a candidate. The logs include command failure details with GitHub tokens removed.
+
 The Unraid weekly checklist reports the GitHub result and pending upstream commits. It warns if the latest run is at least 192 hours old. The workflow and checklist do not install updates or restart Home Assistant.
 
 ## Built on open standards
@@ -79,7 +81,7 @@ LocalThings uses the standards the appliances implement:
 
 - **OCF, the [Open Connectivity Foundation](https://openconnectivity.org/) specification.** Samsung's connected appliances are OCF devices. LocalThings discovers each appliance's resources through `/oic/res` and reads its device type, such as `oic.d.washer`, from `/oic/d`. Where an appliance offers both a standard OCF resource and a Samsung extension for the same state, LocalThings uses the standard one.
 - **CoAP over DTLS.** LocalThings sends Constrained Application Protocol requests, defined in [RFC 7252](https://www.rfc-editor.org/rfc/rfc7252), over an encrypted DTLS session with an X.509 client certificate. It uses CoAP Observe, [RFC 7641](https://www.rfc-editor.org/rfc/rfc7641), for push updates, and block-wise transfer, [RFC 7959](https://www.rfc-editor.org/rfc/rfc7959), for large responses. The [`smartthings-local`](https://github.com/QuiteYellow/SmartThings-Local) library implements the protocol layer.
-- **Home Assistant's own patterns.** Setup, reconfigure and reauthentication run in the UI config flow. A data-update coordinator combines push and polling. DHCP discovery follows an appliance to a new IP address. Repairs notices report gaps. LocalThings redacts diagnostics downloads and translates entity names into ten languages.
+- **Home Assistant's own patterns.** Setup, reconfigure and reauthentication run in the UI config flow. A data-update coordinator combines push and polling. DHCP discovery follows an appliance to a new IP address. Repairs notices report gaps. LocalThings redacts diagnostics downloads and translates entity names into twelve languages.
 - **Declarative appliance maps.** Each appliance type is a table that maps the resources an appliance reports to Home Assistant entities. Tests check the tables against 90+ captures from real appliances, so a new model usually needs a table entry and no protocol code.
 
 ---
@@ -138,7 +140,9 @@ About half of Samsung's appliances report their Wi-Fi MAC address. For those, Ho
 
 ### Older appliances on TCP 8888
 
-Some appliances from about 2018 to 2022 have a different local interface, HTTPS on TCP port 8888. So far this covers a WW6500 washer, TP6X air conditioners, an NV51K777OS Flex Duo wall oven, an NQ70M6650DS microwave/oven combo, and NZ36K7570R and NZ30K7570RS cooktops. Setup detects the interface from the IP address and then asks for a **device token**. Leave the field empty and the appliance issues a token, sending it back to Home Assistant on port 8889. For that to work, switch Remote Control on at the appliance with the door closed, and make sure the appliance can reach Home Assistant on port 8889. If the appliance later rejects its token, Home Assistant asks for a new one.
+Some appliances from about 2018 to 2022 have a different local interface, HTTPS on TCP port 8888. So far this covers a WW6500 washer, TP6X air conditioners, an NV51K777OS Flex Duo wall oven, an NQ70M6650DS microwave/oven combo, NZ36K7570R and NZ30K7570RS cooktops, and an RF28K9380SR refrigerator. Setup detects the interface from the IP address and then asks for a **device token**. Leave the field empty and the appliance issues a token, sending it back to Home Assistant on port 8889. For that to work, switch Remote Control on at the appliance with the door closed, and make sure the appliance can reach Home Assistant on port 8889. If the appliance later rejects its token, Home Assistant asks for a new one.
+
+On the RF28K9380SR refrigerator, when setup asks for the token, hold **Lighting / Control Lock** for about 5 seconds, until "on" shows in the freezer temperature display. It refuses the automatic certificate, so setup then asks for an AC14K_M CA certificate and key, and it needs both to finish.
 
 For the tested NZ36K7570R and NZ30K7570RS cooktops, NV51K777OS oven and NQ70M6650DS combo, **if Smart Connect is already on, no token will be returned**. Turn it off, request a token in LocalThings, then turn it on.
 

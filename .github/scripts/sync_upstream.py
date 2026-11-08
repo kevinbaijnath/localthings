@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlencode
@@ -18,24 +19,39 @@ REQUIRED_CHECKS = frozenset(
 )
 
 
+def sanitize(text: str) -> str:
+    for name in ("GH_TOKEN", "GITHUB_TOKEN"):
+        if token := os.environ.get(name):
+            text = text.replace(token, "***")
+    return text
+
+
 def git(root: Path, *args: str, env: dict[str, str] | None = None) -> str:
-    return subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    ).stdout.strip()
+    try:
+        return subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        print(sanitize(f"Git {args[0]} failed (exit {error.returncode})"), file=sys.stderr)
+        print(sanitize(error.stdout + error.stderr), file=sys.stderr)
+        raise
 
 
-def prepare(root: Path, upstream: str, branch: str) -> dict[str, str] | None:
+def prepare(root: Path, upstream: str, branch: str, report: dict) -> dict[str, str] | None:
     base = git(root, "rev-parse", "HEAD")
+    report.update(base=base, head=base, stage="fetch")
     git(root, "fetch", "--no-tags", upstream, "main")
     upstream_sha = git(root, "rev-parse", "FETCH_HEAD")
+    report.update(upstream=upstream_sha, stage="merge")
     ancestor = subprocess.run(
         ["git", "-C", str(root), "merge-base", "--is-ancestor", upstream_sha, base],
         check=False,
         capture_output=True,
+        text=True,
     )
     if ancestor.returncode == 0:
         return None
@@ -49,13 +65,21 @@ def prepare(root: Path, upstream: str, branch: str) -> dict[str, str] | None:
         "GIT_COMMITTER_NAME": AUTHOR_NAME,
         "GIT_COMMITTER_EMAIL": AUTHOR_EMAIL,
     }
-    git(root, "merge", "--no-ff", "--no-edit", upstream_sha, env=identity)
-    return {
+    try:
+        git(root, "merge", "--no-ff", "--no-edit", upstream_sha, env=identity)
+    except subprocess.CalledProcessError:
+        conflicts = git(root, "diff", "--name-only", "--diff-filter=U").splitlines()
+        if conflicts:
+            report.update(error_kind="merge_conflict", conflicts=conflicts)
+        raise
+    candidate = {
         "base": base,
         "upstream": upstream_sha,
         "head": git(root, "rev-parse", "HEAD"),
         "branch": branch,
     }
+    report.update(candidate)
+    return candidate
 
 
 class GitHub:
@@ -179,31 +203,69 @@ def promote(github, candidate: dict[str, str]) -> str:
 
 
 def main() -> None:
-    if (
-        os.environ["GITHUB_REPOSITORY"] != REPOSITORY
-        or os.environ["GITHUB_REF"] != "refs/heads/main"
-    ):
-        raise RuntimeError("This updater runs only from the maintained fork's main branch")
-    branch = f"codex/upstream-sync-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
-    root = Path.cwd()
-    candidate = prepare(root, UPSTREAM, branch)
-    if candidate is None:
-        result = {"result": "up_to_date"}
-    else:
-        git(root, "push", "origin", f"{candidate['head']}:refs/heads/{branch}")
-        github = GitHub()
-        run = validate(github, candidate)
-        pull_url = promote(github, candidate)
-        result = {
-            "result": "merged",
-            **candidate,
-            "validation_run": run["html_url"],
-            "pr": pull_url,
-        }
-    print(json.dumps(result))
-    with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-        summary.write("## LocalThings upstream sync\n\n```json\n")
-        summary.write(json.dumps(result, indent=2) + "\n```\n")
+    report = {"result": "failed", "stage": "context", "conflicts": []}
+    try:
+        if (
+            os.environ["GITHUB_REPOSITORY"] != REPOSITORY
+            or os.environ["GITHUB_REF"] != "refs/heads/main"
+        ):
+            raise RuntimeError("This updater runs only from the maintained fork's main branch")
+        branch = (
+            f"codex/upstream-sync-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+        )
+        report.update(branch=branch, stage="prepare")
+        root = Path.cwd()
+        candidate = prepare(root, UPSTREAM, branch, report)
+        if candidate is None:
+            report.update(result="up_to_date", next_action="No update is needed.")
+        else:
+            report["stage"] = "push"
+            git(root, "push", "origin", f"{candidate['head']}:refs/heads/{branch}")
+            github = GitHub()
+            report["stage"] = "validation"
+            run = validate(github, candidate)
+            report.update(validation_run=run["html_url"], stage="promotion")
+            pull_url = promote(github, candidate)
+            report.update(
+                result="merged",
+                pr=pull_url,
+                next_action="Source updated. Home Assistant was not installed or restarted.",
+            )
+        report["stage"] = "complete"
+    except Exception as error:
+        if "error_kind" not in report:
+            report["error_kind"] = (
+                "command_failed"
+                if isinstance(error, subprocess.CalledProcessError)
+                else "sync_failed"
+            )
+        report["error"] = sanitize(str(error))
+        if report["error_kind"] == "merge_conflict":
+            report["next_action"] = (
+                "Resolve the listed files against these revisions, then run all required checks. "
+                "The candidate was not pushed."
+            )
+        elif report["stage"] in {"context", "prepare", "fetch", "merge"}:
+            report["next_action"] = "Fix the reported command or configuration error, then retry."
+        elif report["stage"] == "push":
+            report["next_action"] = "Check repository access and the push error, then retry."
+        elif report["stage"] == "validation":
+            report["next_action"] = "Inspect candidate validation and fix it before promotion."
+        else:
+            report["next_action"] = (
+                "Inspect the pull request, branch rules and revisions before retrying promotion."
+            )
+        if isinstance(error, subprocess.CalledProcessError):
+            report["diagnostics"] = sanitize((error.stdout or "") + (error.stderr or ""))
+            if error.cmd[0] == "gh":
+                print(report["diagnostics"], file=sys.stderr)
+        raise
+    finally:
+        rendered = sanitize(json.dumps(report, indent=2))
+        print(rendered)
+        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+            summary.write("## LocalThings upstream sync\n\n```json\n")
+            summary.write(rendered + "\n```\n")
 
 
 if __name__ == "__main__":

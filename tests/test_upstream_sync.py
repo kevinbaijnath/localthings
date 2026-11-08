@@ -1,6 +1,7 @@
 """Keep upstream merges separate from installed Home Assistant code."""
 
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -46,7 +47,7 @@ def test_no_update_does_not_create_branch_or_commit(repositories):
     upstream, fork = repositories
     before = git(fork, "rev-parse", "HEAD")
 
-    assert sync.prepare(fork, str(upstream), "codex/update-fixture") is None
+    assert sync.prepare(fork, str(upstream), "codex/update-fixture", {}) is None
 
     assert git(fork, "rev-parse", "HEAD") == before
     assert git(fork, "branch", "--show-current") == "main"
@@ -57,7 +58,7 @@ def test_upstream_merge_retains_custom_frame_code(repositories):
     upstream_sha = commit(upstream, "appliance.txt", "new appliance fix\n")
     base_sha = git(fork, "rev-parse", "HEAD")
 
-    candidate = sync.prepare(fork, str(upstream), "codex/update-fixture")
+    candidate = sync.prepare(fork, str(upstream), "codex/update-fixture", {})
 
     assert candidate["base"] == base_sha
     assert candidate["upstream"] == upstream_sha
@@ -75,7 +76,7 @@ def test_conflict_stops_before_a_merge_commit(repositories):
     commit(upstream, "appliance.txt", "conflicting upstream setting\n")
 
     with pytest.raises(subprocess.CalledProcessError):
-        sync.prepare(fork, str(upstream), "codex/update-fixture")
+        sync.prepare(fork, str(upstream), "codex/update-fixture", {})
 
     assert git(fork, "rev-parse", "HEAD") == before
     assert (fork / "frame.txt").read_text() == "working TV support\n"
@@ -274,25 +275,266 @@ def test_changed_base_after_pr_creation_stops_before_merge(candidate):
     assert not any(call[1] == "PUT" for call in github.calls)
 
 
-def test_failed_validation_never_promotes_candidate(candidate, monkeypatch, tmp_path):
-    calls = []
+@pytest.fixture
+def run_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_REPOSITORY", sync.REPOSITORY)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
     monkeypatch.setenv("GITHUB_RUN_ID", "123")
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
-    monkeypatch.setattr(sync, "prepare", lambda *_: candidate)
-    monkeypatch.setattr(sync, "git", lambda *args: calls.append(args))
-    github = GitHub()
-    github.run["conclusion"] = "failure"
-    monkeypatch.setattr(sync, "GitHub", lambda: github)
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    return summary
 
-    with pytest.raises(RuntimeError, match="validation failed"):
+
+def read_summary(path):
+    return json.loads(path.read_text().split("```json\n", 1)[1].split("\n```", 1)[0])
+
+
+def test_add_add_conflict_reports_revisions_and_stops_before_push(
+    repositories, monkeypatch, run_environment, capsys
+):
+    upstream, fork = repositories
+    base = commit(fork, "media_player.py", "Frame TV player\n")
+    upstream_sha = commit(upstream, "media_player.py", "Soundbar player\n")
+    monkeypatch.chdir(fork)
+    monkeypatch.setattr(sync, "UPSTREAM", str(upstream))
+    monkeypatch.setattr(
+        sync, "GitHub", lambda: pytest.fail("Must not call GitHub after a conflict")
+    )
+
+    with pytest.raises(subprocess.CalledProcessError):
         sync.main()
 
-    assert len(calls) == 1
-    assert calls[0][1] == "push"
-    assert not any(call[0].endswith("/pulls") for call in github.calls)
+    report = read_summary(run_environment)
+    assert report["result"] == "failed"
+    assert report["stage"] == "merge"
+    assert report["error_kind"] == "merge_conflict"
+    assert report["conflicts"] == ["media_player.py"]
+    assert report["base"] == report["head"] == base
+    assert report["upstream"] == upstream_sha
+    assert report["branch"] == "codex/upstream-sync-123-1"
+    assert "not pushed" in report["next_action"]
+    assert git(fork, "rev-parse", "HEAD") == base
+    assert not git(upstream, "for-each-ref", "refs/heads/codex/")
+    assert "CONFLICT (add/add)" in report["diagnostics"]
+    assert "CONFLICT (add/add)" in capsys.readouterr().err
+
+
+def test_fetch_failure_is_not_reported_as_a_conflict(
+    repositories, monkeypatch, run_environment, capsys, tmp_path
+):
+    _, fork = repositories
+    base = git(fork, "rev-parse", "HEAD")
+    monkeypatch.chdir(fork)
+    monkeypatch.setattr(sync, "UPSTREAM", str(tmp_path / "missing-upstream"))
+    monkeypatch.setattr(
+        sync, "GitHub", lambda: pytest.fail("Must not call GitHub after fetch fails")
+    )
+
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.main()
+
+    report = read_summary(run_environment)
+    assert report["stage"] == "fetch"
+    assert report["error_kind"] == "command_failed"
+    assert report["conflicts"] == []
+    assert report["base"] == report["head"] == base
+    assert "upstream" not in report
+    assert git(fork, "branch", "--show-current") == "main"
+    assert "does not appear to be a git repository" in capsys.readouterr().err
+
+
+def test_merge_command_failure_without_unmerged_files_is_not_a_conflict(
+    repositories, monkeypatch, run_environment
+):
+    upstream, fork = repositories
+    commit(upstream, "appliance.txt", "new appliance fix\n")
+    monkeypatch.chdir(fork)
+    monkeypatch.setattr(sync, "UPSTREAM", str(upstream))
+    original_git = sync.git
+
+    def fail_merge(root, *args, **kwargs):
+        if args[0] == "merge":
+            raise subprocess.CalledProcessError(128, ["git", "merge"], stderr="fatal: disk error")
+        return original_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(sync, "git", fail_merge)
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.main()
+
+    report = read_summary(run_environment)
+    assert report["stage"] == "merge"
+    assert report["error_kind"] == "command_failed"
+    assert report["conflicts"] == []
+
+
+def test_merge_base_failure_preserves_text_diagnostics(repositories, monkeypatch, run_environment):
+    upstream, fork = repositories
+    commit(upstream, "appliance.txt", "new appliance fix\n")
+    monkeypatch.chdir(fork)
+    monkeypatch.setattr(sync, "UPSTREAM", str(upstream))
+    original_run = sync.subprocess.run
+
+    def fail_merge_base(args, **kwargs):
+        if "merge-base" in args:
+            assert kwargs["text"] is True
+            return subprocess.CompletedProcess(args, 128, stdout="", stderr="fatal: bad object\n")
+        return original_run(args, **kwargs)
+
+    monkeypatch.setattr(sync.subprocess, "run", fail_merge_base)
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.main()
+
+    report = read_summary(run_environment)
+    assert report["error_kind"] == "command_failed"
+    assert report["diagnostics"] == "fatal: bad object\n"
+    assert report["conflicts"] == []
+
+
+def test_up_to_date_summary_includes_both_revisions(repositories, monkeypatch, run_environment):
+    upstream, fork = repositories
+    monkeypatch.chdir(fork)
+    monkeypatch.setattr(sync, "UPSTREAM", str(upstream))
+    monkeypatch.setattr(sync, "GitHub", lambda: pytest.fail("Up-to-date sync must not call GitHub"))
+
+    sync.main()
+
+    report = read_summary(run_environment)
+    assert report["result"] == "up_to_date"
+    assert report["stage"] == "complete"
+    assert report["base"] == report["head"] == git(fork, "rev-parse", "HEAD")
+    assert report["upstream"] == git(upstream, "rev-parse", "HEAD")
+    assert report["conflicts"] == []
+
+
+def test_command_diagnostics_redact_github_tokens(repositories, monkeypatch, capsys):
+    _, fork = repositories
+    monkeypatch.setenv("GH_TOKEN", "synthetic-gh-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-github-token")
+    error = subprocess.CalledProcessError(
+        128,
+        ["git", "fetch"],
+        output="remote: synthetic-gh-token\n",
+        stderr="fatal: synthetic-github-token\n",
+    )
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(sync.subprocess, "run", fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.git(fork, "fetch", "upstream", "main")
+
+    diagnostics = capsys.readouterr().err
+    assert "Git fetch failed (exit 128)" in diagnostics
+    assert "remote: ***" in diagnostics
+    assert "fatal: ***" in diagnostics
+    assert "synthetic-" not in diagnostics
+
+
+@pytest.mark.parametrize("stage", ["push", "validation", "promotion"])
+def test_failed_candidate_stage_reports_failure_and_does_not_continue(
+    candidate, monkeypatch, run_environment, stage
+):
+    calls = []
+    github = GitHub()
+
+    def prepare(*args):
+        args[-1].update(candidate)
+        return candidate
+
+    def push(*args):
+        calls.append("push")
+        if stage == "push":
+            raise subprocess.CalledProcessError(128, ["git", "push"])
+
+    monkeypatch.setattr(sync, "prepare", prepare)
+    monkeypatch.setattr(sync, "git", push)
+    monkeypatch.setattr(sync, "GitHub", lambda: github)
+    if stage == "validation":
+        github.run["conclusion"] = "failure"
+    if stage == "promotion":
+        github.base = "changed-main-sha"
+
+    with pytest.raises((subprocess.CalledProcessError, RuntimeError)):
+        sync.main()
+
+    report = read_summary(run_environment)
+    assert report["result"] == "failed"
+    assert report["stage"] == stage
+    assert report["base"] == candidate["base"]
+    assert report["upstream"] == candidate["upstream"]
+    assert report["head"] == candidate["head"]
+    assert report["next_action"]
+    assert calls == ["push"]
+    assert not any(call[0].endswith("/pulls") or call[1] == "PUT" for call in github.calls)
+    if stage == "push":
+        assert not github.calls
+    if stage == "promotion":
+        assert report["validation_run"] == github.run["html_url"]
+
+
+def test_successful_sync_summary_identifies_validated_commit(
+    candidate, monkeypatch, run_environment
+):
+    github = GitHub()
+
+    def prepare(*args):
+        args[-1].update(candidate)
+        return candidate
+
+    monkeypatch.setattr(sync, "prepare", prepare)
+    monkeypatch.setattr(sync, "git", lambda *_: None)
+    monkeypatch.setattr(sync, "GitHub", lambda: github)
+
+    sync.main()
+
+    report = read_summary(run_environment)
+    assert report["result"] == "merged"
+    assert report["stage"] == "complete"
+    assert report["head"] == candidate["head"]
+    assert report["validation_run"] == github.run["html_url"]
+    assert report["pr"] == "https://example.invalid/pull/9"
+
+
+def test_github_failure_diagnostics_and_summary_redact_token(
+    candidate, monkeypatch, run_environment, capsys
+):
+    monkeypatch.setenv("GH_TOKEN", "synthetic-token")
+
+    def prepare(*args):
+        args[-1].update(candidate)
+        return candidate
+
+    class DeniedGitHub:
+        def api(self, *args):
+            raise subprocess.CalledProcessError(
+                1, ["gh", "api"], output="", stderr="HTTP 403: synthetic-token denied"
+            )
+
+    monkeypatch.setattr(sync, "prepare", prepare)
+    monkeypatch.setattr(sync, "git", lambda *_: None)
+    monkeypatch.setattr(sync, "GitHub", DeniedGitHub)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        sync.main()
+
+    report = read_summary(run_environment)
+    assert report["stage"] == "validation"
+    assert report["error_kind"] == "command_failed"
+    assert report["diagnostics"] == "HTTP 403: *** denied"
+    output = capsys.readouterr()
+    assert "HTTP 403: *** denied" in output.err
+    assert "synthetic-token" not in output.err + output.out + run_environment.read_text()
+
+
+def test_context_rejection_still_writes_failure_summary(monkeypatch, run_environment):
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/untrusted")
+    with pytest.raises(RuntimeError, match="maintained fork"):
+        sync.main()
+    report = read_summary(run_environment)
+    assert report["stage"] == "context"
+    assert report["result"] == "failed"
 
 
 def test_scheduled_controller_uses_trusted_main_and_narrow_permissions():

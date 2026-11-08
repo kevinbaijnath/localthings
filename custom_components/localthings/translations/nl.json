@@ -61,6 +61,18 @@
       "door_open": {
         "name": "Deur"
       },
+      "door_1_open": {
+        "name": "Deur 1"
+      },
+      "door_2_open": {
+        "name": "Deur 2"
+      },
+      "door_3_open": {
+        "name": "Deur 3"
+      },
+      "door_4_open": {
+        "name": "Deur 4"
+      },
       "filter_blockage": {
         "name": "Filterverstopping"
       },
@@ -676,6 +688,17 @@
           "very": "Zeer"
         }
       },
+      "drying_temperature": {
+        "name": "Temperatuur",
+        "state": {
+          "none": "Geen warmte",
+          "extra_low": "Extra laag",
+          "low": "Laag",
+          "medium_low": "Middel-laag",
+          "medium": "Middel",
+          "high": "Hoog"
+        }
+      },
       "favorite_capacity": {
         "name": "Favoriete capaciteit"
       },
@@ -714,7 +737,15 @@
           "cv_fdr_soft_freezer": "Zachtvriezer",
           "fconvert_freezer": "Vriezen",
           "fconvert_fridge": "Koelen",
-          "fconvert_off": "Uit"
+          "fconvert_off": "Uit",
+          "cv_ttype_freezer": "Vriezer",
+          "cv_ttype_soft_freezer": "Zachtvriezer",
+          "cv_ttype_chill": "Koelen op laag",
+          "cv_ttype_cool": "Koel",
+          "cv_ttype_ferment": "Fermenteren",
+          "cv_ttype_kimchi_warm": "Kimchi, zwak",
+          "cv_ttype_kimchi_normal": "Kimchi",
+          "cv_ttype_kimchi_cold": "Kimchi, sterk"
         }
       },
       "heated_dry": {
@@ -1714,12 +1745,14 @@
           "idle": "Inactief",
           "delaywash": "Uitgestelde start",
           "weightsensing": "Beladingsdetectie",
+          "laundrysensing": "Wasgoeddetectie",
           "wash": "Wassen",
           "rinse": "Spoelen",
           "spin": "Centrifugeren",
           "finish": "Voltooid",
           "steaming": "Stomen",
           "airwashing": "Luchtreiniging",
+          "aidrying": "Drogen",
           "drying": "Drogen",
           "dryingwithdooropen": "Ventileren",
           "cooling": "Koelen",
@@ -2717,6 +2750,9 @@
     },
     "vacuum_command_params": {
       "message": "Opdrachten voor de robotstofzuiger hebben geen parameters."
+    },
+    "media_option_not_supported": {
+      "message": "Het apparaat biedt deze optie nu niet aan."
     }
   },
   "selector": {
@@ -2732,6 +2768,7 @@
         "winecellar_bottom": "Onderste wijnzone",
         "door_freezer": "Vriezerdeur",
         "door_cooler": "Koelkastdeur",
+        "door_fridge": "Koelkastdeur",
         "door_cvroom": "Flexzonedeur",
         "door_winecellar": "Wijnkoelerdeur",
         "door_onedoorfreezer": "Hoofddeur",
