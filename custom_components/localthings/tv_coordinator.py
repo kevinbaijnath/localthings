@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from datetime import timedelta
 from typing import Any, cast
@@ -12,7 +12,7 @@ from typing import Any, cast
 from aiohttp import ClientSession
 from homeassistant.config_entries import ConfigEntry, ConfigFlowContext
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -31,6 +31,10 @@ from .tv import (
     async_read_tv_identity,
     async_set_mute,
 )
+from .tv_artwork import TvArtworkClient
+from .tv_artwork_albums import ArtworkAlbums
+from .tv_artwork_cache import ArtworkCache
+from .tv_artwork_slideshow import ArtworkSlideshow
 from .tv_power import TvPowerAuthorizationIncomplete, TvPowerClient, TvPowerPairingRejected
 
 _LOGGER = logging.getLogger(__name__)
@@ -99,6 +103,23 @@ class TvCoordinator(DataUpdateCoordinator[TvState]):
         self._closed = False
         self._connected = False
         self.data = _UNKNOWN
+        self.slideshow = ArtworkSlideshow(hass, self)
+        self.artwork = ArtworkCache(
+            hass,
+            config_entry.entry_id if config_entry is not None else identity.device_id,
+            TvArtworkClient(host),
+            self.async_artwork_operation,
+            lambda: self.state.mode in {FrameMode.TV, FrameMode.ART},
+            device_id=identity.device_id,
+            run_verified_operation=self.async_verified_artwork_operation,
+            slideshow_running=lambda: self.slideshow.running,
+        )
+        self.albums = ArtworkAlbums(
+            hass,
+            config_entry.entry_id if config_entry is not None else identity.device_id,
+            identity.device_id,
+            self.artwork,
+        )
         self._unsub_stop: Callable[[], None] | None = hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STOP, self._async_on_stop
         )
@@ -136,6 +157,12 @@ class TvCoordinator(DataUpdateCoordinator[TvState]):
                 else None
             ),
         }
+
+    @callback
+    def async_update_listeners(self) -> None:
+        """Invalidate a playlist on mode loss, including ordinary polling results."""
+        self.slideshow.observe_mode()
+        super().async_update_listeners()
 
     def _ensure_open(self, *, websocket: bool = False) -> None:
         if self._closing:
@@ -516,6 +543,72 @@ class TvCoordinator(DataUpdateCoordinator[TvState]):
             self._ensure_open(websocket=True)
             await self._async_command("send_key", key)
 
+    async def async_artwork_operation[T](self, operation: Callable[[], T]) -> T:
+        """Keep artwork failures separate from working control permissions."""
+        async with self._command_lock:
+            self._ensure_open()
+            if self.state.mode not in {FrameMode.TV, FrameMode.ART}:
+                raise HomeAssistantError("Turn on the TV before requesting artwork")
+            return await self._async_executor(operation)
+
+    async def async_verified_artwork_operation[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+        """Keep fresh identity, final guards and the write under the command lock."""
+        async with self._command_lock:
+            self._ensure_open()
+            try:
+                identity = await self._async_identity()
+            except (TvError, UpdateFailed):
+                raise HomeAssistantError("TV identity could not be verified") from None
+            if (
+                self.state.mode not in {FrameMode.TV, FrameMode.ART}
+                or identity.power_state is None
+                or identity.power_state.casefold() != "on"
+            ):
+                raise HomeAssistantError("TV must be on for this artwork operation")
+            self._ensure_open()
+            return await operation()
+
+    async def async_slideshow_operation[T](
+        self, operation: Callable[[], Awaitable[T]], *, require_art: bool = True
+    ) -> T:
+        """Read fresh identity and mode under the same lock as a slideshow write."""
+        async with self._command_lock:
+            self._ensure_open()
+            try:
+                identity = await self._async_identity()
+                power = await self._async_power()
+                art = await self._async_power("async_read_art_mode")
+                picture = await self._async_power("async_read_picture_mode")
+            except (TvError, UpdateFailed):
+                self.async_set_updated_data(_UNKNOWN)
+                raise HomeAssistantError(
+                    "TV mode could not be verified; playlist stopped"
+                ) from None
+            mode = FrameMode.UNKNOWN
+            if power is False:
+                mode = FrameMode.OFF
+            elif (
+                power is True
+                and identity.power_state is not None
+                and identity.power_state.casefold() == "on"
+            ):
+                if art is True and picture == "Ambient":
+                    mode = FrameMode.ART
+                elif art is False and picture and picture != "Ambient":
+                    mode = FrameMode.TV
+            self.async_set_updated_data(TvState(mode, art, self.state.muted))
+            if mode not in ({FrameMode.ART} if require_art else {FrameMode.ART, FrameMode.TV}):
+                raise HomeAssistantError(
+                    "TV must be in Art Mode for this playlist"
+                    if require_art
+                    else "TV must be awake to stop native rotation"
+                )
+            self._ensure_open()
+            try:
+                return await operation()
+            finally:
+                self.async_set_updated_data(self.state)
+
     async def async_config_entry_first_refresh(self) -> None:
         """Close owned SDK sockets if initial setup cannot complete."""
         try:
@@ -535,10 +628,13 @@ class TvCoordinator(DataUpdateCoordinator[TvState]):
     async def async_close(self) -> None:
         """Stop polling and wait for serialized work; never close the HA session."""
         self._closing = True
+        await self.albums.async_close()
+        await self.slideshow.async_close()
         await super().async_shutdown()
         if self._unsub_stop is not None:
             self._unsub_stop()
             self._unsub_stop = None
+        await self.artwork.async_close()
         async with self._command_lock:
             if self._closed:
                 return

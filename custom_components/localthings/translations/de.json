@@ -245,6 +245,9 @@
       },
       "pair_bluetooth": {
         "name": "Bluetooth koppeln"
+      },
+      "tv_artwork_refresh": {
+        "name": "Refresh artwork list"
       }
     },
     "climate": {
@@ -2520,7 +2523,13 @@
           "subdevices": "Untergeräte",
           "cloud_courses": "Download-Programme",
           "debug_write": "Debug: In eine Ressource schreiben",
-          "forget_learned_modes": "Gemerkte Modi vergessen"
+          "forget_learned_modes": "Gemerkte Modi vergessen",
+          "upload_artwork": "Upload artwork",
+          "upload_finish": "Finish",
+          "delete_artwork": "Delete a recorded photo",
+          "delete_status": "Check a removal",
+          "delete_artworks": "Delete photos",
+          "delete_artworks_status": "Check photo removals"
         }
       },
       "settings": {
@@ -2599,19 +2608,145 @@
           "cloud_guided": "Erneut warten",
           "cloud_finish": "Fertig"
         }
+      },
+      "upload_artwork": {
+        "title": "Upload artwork",
+        "description": "Choose one JPEG or PNG. This sends the original to Home Assistant for inspection, not to the TV. The file must be at most 30 MiB. Its landscape crop must contain at least 3840 x 2160 source pixels. No enlargement is allowed.",
+        "data": {
+          "file": "Image file"
+        }
+      },
+      "upload_crop": {
+        "title": "Choose crop position",
+        "description": "Choose which part of the photo to keep. The largest available 16:9 crop will fill the Frame. The next screen shows the exact prepared picture.",
+        "data": {
+          "position": "Crop position"
+        }
+      },
+      "upload_review": {
+        "title": "Review prepared artwork",
+        "description": "Meets 4K requirements. Source: {source}. Usable crop: {crop}. Final: 3840 x 2160 JPEG.\n\n![Prepared artwork]({preview})\n\n[Inspect at full resolution]({preview})\n\nCheck sharpness, crop, subject and visible defects. Pixel dimensions cannot prove that the source is sharp or was never enlarged. This private preview expires after 10 minutes. Anyone who receives its temporary link can view it until it expires.",
+        "menu_options": {
+          "upload_confirm": "Upload to TV",
+          "upload_crop": "Adjust crop",
+          "upload_artwork": "Choose another image",
+          "upload_finish": "Cancel"
+        }
+      },
+      "upload_confirm": {
+        "title": "Confirm upload to TV",
+        "description": "Upload this prepared picture once? The TV must already be on or in Art Mode. No matte is added. The picture is not selected by this flow, but the TV might change its screen during upload.\n\n![Prepared artwork]({preview})\n\nSource: {source}. Crop: {crop}. Final: 3840 x 2160 JPEG.\n\nPress Submit to send it. Do not resubmit if the result is uncertain."
+      },
+      "upload_prepare": {
+        "title": "Prepare artwork"
+      },
+      "upload_progress": {
+        "title": "Upload artwork"
+      },
+      "upload_complete": {
+        "title": "Artwork uploaded",
+        "description": "The TV accepted artwork {content_id}, and its catalog confirms it. Open the artwork gallery to select it for display. This confirms acceptance, not a byte-for-byte readback of the TV image."
+      },
+      "upload_unconfirmed": {
+        "title": "Artwork accepted; catalog not confirmed",
+        "description": "The TV accepted artwork {content_id}, but a later catalog read could not confirm it. Do not upload the same picture again. Check the gallery after its next successful refresh."
+      },
+      "upload_uncertain": {
+        "title": "Upload outcome uncertain",
+        "description": "The TV connection failed during the request. The TV may already have stored the picture. This preparation cannot be sent again. Check the TV or its gallery before starting another upload."
+      },
+      "upload_not_sent": {
+        "title": "Artwork was not sent",
+        "description": "{reason}. No upload reached the TV. Make sure the TV is on or in Art Mode and the integration is connected before starting a new upload. This prepared copy has been discarded. No automatic retry will occur."
+      },
+      "delete_artwork": {
+        "title": "Delete a recorded photo",
+        "description": "Enter the exact Samsung ID of a photo uploaded and recorded by this integration. Older and externally uploaded photos are protected. This step only checks the photo.",
+        "data": {
+          "content_id": "Samsung artwork ID"
+        }
+      },
+      "delete_status": {
+        "title": "Check a removal",
+        "description": "Enter the Samsung ID from an earlier removal. This only reads the TV catalog. It cannot send a deletion.",
+        "data": {
+          "content_id": "Samsung artwork ID"
+        }
+      },
+      "delete_prepare": {
+        "title": "Check photos for deletion"
+      },
+      "delete_confirm": {
+        "title": "Confirm deletion from Frame",
+        "description": "Remove the checked photos ({count}) from this TV? This has no undo. Original files on your computer or NAS stay unchanged.\n\n{photos}\n\n![Checked TV contact sheet]({preview})\n\nThe review expires after five minutes. Leave other TV-library controls untouched. Press Submit once. Photos are removed one at a time. Any result other than confirmed removal stops the rest. Closing after Submit does not cancel accepted work."
+      },
+      "delete_progress": {
+        "title": "Check photo removal results"
+      },
+      "delete_complete": {
+        "title": "Removed from Frame",
+        "description": "A fresh TV catalog confirmed removal for all checked photos ({count}). Your original files stay unchanged.\n\n{results}"
+      },
+      "delete_present": {
+        "title": "Removal not confirmed",
+        "description": "The checked photo is still present. No automatic retry will occur. Status checks cannot resend deletion.\n\n{results}"
+      },
+      "delete_uncertain": {
+        "title": "Removal result uncertain",
+        "description": "The removal result is uncertain. Do not send another removal. A status check cannot resend deletion.\n\n{results}"
+      },
+      "delete_not_sent": {
+        "title": "Deletion not sent",
+        "description": "The deletion was not sent. Your original files stay unchanged.\n\n{results}"
+      },
+      "delete_blocked": {
+        "title": "Photo is protected",
+        "description": "The entire checked group was blocked. Nothing was deleted. Photo {content_id}: {reason}\n\n{photos}"
+      },
+      "delete_artworks": {
+        "title": "Delete recorded photos",
+        "description": "Enter a list of one to ten distinct Samsung personal-photo IDs. Every photo must have a verified upload record. Review checks the whole group before deletion.",
+        "data": {
+          "content_ids": "Samsung artwork IDs"
+        }
+      },
+      "delete_artworks_status": {
+        "title": "Check exact photo removals",
+        "description": "Enter the saved content_id and record_token references as a list. This only checks existing removal records. It cannot send a deletion.",
+        "data": {
+          "references": "Exact removal references"
+        }
+      },
+      "delete_partial": {
+        "title": "Photo removal results",
+        "description": "The group did not finish with one result. Removed photos cannot be restored here. Later photos were not attempted after the first result other than confirmed removal. No automatic retry will occur.\n\n{results}"
       }
     },
     "error": {
       "empty_payload": "Geben Sie mindestens ein zu schreibendes Feld ein.",
       "write_failed": "Der Schreibvorgang ist fehlgeschlagen. Weitere Details finden Sie im Home-Assistant-Protokoll.",
       "cloud_course_name_duplicate": "Zwei Programme haben denselben Namen. Namen müssen eindeutig sein.",
-      "cloud_course_unknown_course": "Dieses Programm wird von diesem Gerät nicht angeboten. Wählen Sie eines aus der Liste."
+      "cloud_course_unknown_course": "Dieses Programm wird von diesem Gerät nicht angeboten. Wählen Sie eines aus der Liste.",
+      "upload_busy": "Another artwork preparation is active for this Frame. Finish or cancel it, or wait up to 10 minutes.",
+      "delete_invalid_selection": "Use one to ten distinct personal-photo IDs or exact saved removal references."
     },
     "abort": {
-      "not_loaded": "Dieses Gerät ist noch nicht verbunden. Versuchen Sie es erneut, sobald es geladen wurde."
+      "not_loaded": "Dieses Gerät ist noch nicht verbunden. Versuchen Sie es erneut, sobald es geladen wurde.",
+      "upload_unauthorized": "Open this flow from an authenticated Home Assistant administrator session.",
+      "upload_expired": "This artwork preparation expired or was cleared. Choose the image again.",
+      "upload_invalid_image": "This image does not meet the upload requirements. {reason}",
+      "upload_finished": "Artwork upload closed. Device settings were not changed.",
+      "delete_unauthorized": "Use the same Home Assistant administrator session that started this removal.",
+      "delete_expired": "The checked photo review expired or was cleared. Start a new review. Any earlier accepted work was not resent.",
+      "delete_finished": "Removal dialog closed. Your original file stays unchanged.",
+      "delete_missing": "No removal record was found. If a request was sent earlier, its result is unknown. This check did not send or resend a deletion."
     },
     "progress": {
-      "cloud_wait": "Öffnen Sie in der SmartThings-App (nicht am Gerät selbst) dieses Gerät und tippen Sie auf \"Download-Programme\" -- eine eigene Zeile, getrennt von \"Programm\", weiter unten im Bildschirm, die nur die Programme auflistet, die auf diese Weise erkannt werden können. Wählen Sie eines aus, das noch nicht als \"Heruntergeladen\" markiert ist, und tippen Sie auf Fertig.\n\nDas Gerät muss dafür nicht in der Nähe sein oder das Programm ausführen -- es muss nur eingeschaltet und verbunden sein.\n\nBisher benannt ({named} von {total}): {named_list}\n\nSie können dieses Fenster jederzeit schließen – die Namen werden fortlaufend gespeichert."
+      "cloud_wait": "Öffnen Sie in der SmartThings-App (nicht am Gerät selbst) dieses Gerät und tippen Sie auf \"Download-Programme\" -- eine eigene Zeile, getrennt von \"Programm\", weiter unten im Bildschirm, die nur die Programme auflistet, die auf diese Weise erkannt werden können. Wählen Sie eines aus, das noch nicht als \"Heruntergeladen\" markiert ist, und tippen Sie auf Fertig.\n\nDas Gerät muss dafür nicht in der Nähe sein oder das Programm ausführen -- es muss nur eingeschaltet und verbunden sein.\n\nBisher benannt ({named} von {total}): {named_list}\n\nSie können dieses Fenster jederzeit schließen – die Namen werden fortlaufend gespeichert.",
+      "upload_prepare": "Inspecting and preparing the image locally. Nothing is being sent to the TV.",
+      "upload_progress": "Sending this artwork once. Do not start another upload if this connection is interrupted.",
+      "delete_prepare": "Checking the entire photo group. Nothing is being deleted.",
+      "delete_progress": "Removing checked photos one at a time and checking each result. No deletion is retried."
     }
   },
   "issues": {
@@ -2777,6 +2912,15 @@
         "cubed_ice": "Eiswürfel",
         "ice_bites": "Ice Bites",
         "whiskey_ice_ball": "Eiskugeln"
+      }
+    },
+    "artwork_crop": {
+      "options": {
+        "left": "Left",
+        "center": "Center",
+        "right": "Right",
+        "top": "Top",
+        "bottom": "Bottom"
       }
     }
   },

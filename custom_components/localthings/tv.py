@@ -294,6 +294,9 @@ class _DeadlineSocket:
                 self._deadline.remaining()
         return sent
 
+    def sendall(self, data: bytes) -> None:
+        self.send(data)
+
 
 class _DeadlineConnection(SamsungTVWSConnection):
     """Bound each complete SDK event and each socket wait to one deadline."""

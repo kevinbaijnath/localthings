@@ -122,6 +122,7 @@ from .tv import (
     TvPairingTimeout,
     async_read_tv_identity,
 )
+from .tv_artwork_upload import TvArtworkUploadFlow
 from .tv_power import TvPowerAuthorizationIncomplete, TvPowerClient, TvPowerPairingRejected
 
 _TEXT = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
@@ -1094,7 +1095,9 @@ class LocalThingsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> LocalThingsOptionsFlow:
+    ) -> LocalThingsOptionsFlow | TvArtworkUploadFlow:
+        if config_entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+            return TvArtworkUploadFlow()
         return LocalThingsOptionsFlow()
 
     def _create_entry(self, info: dict) -> ConfigFlowResult:
