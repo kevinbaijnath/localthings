@@ -29,7 +29,7 @@ TRANSPORT_TV_WS = "tv_ws"
 CONF_TV_TOKEN = "tv_token"
 CONF_TV_POWER_TOKEN = "tv_power_token"
 CONF_DEVICE_KIND = "device_kind"
-TV_PLATFORMS = ["media_player", "remote", "switch"]
+TV_PLATFORMS = ["media_player", "remote", "switch", "button"]
 # How a CoAP device is read, decided once at setup (config_flow._read_device).
 # Absent: GET its /device/0 Collection. READ_MODE_PER_HREF: it has none, so
 # each href /oic/res advertises is read on its own (registry/flat.py).

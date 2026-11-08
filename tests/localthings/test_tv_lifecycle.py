@@ -1,11 +1,15 @@
 """TV lifecycle never reads or mutates appliance state."""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from aiohttp.test_utils import make_mocked_request
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.http import current_request
 
 from custom_components import localthings as integration
 from custom_components.localthings.const import DOMAIN
@@ -25,10 +29,14 @@ def tv_coordinator():
             "state",
             "connected",
             "connection_diagnostics",
+            "artwork",
+            "albums",
         ]
     )
     coord.async_config_entry_first_refresh = AsyncMock()
     coord.async_close = AsyncMock()
+    coord.artwork = Mock(async_load=AsyncMock())
+    coord.albums = Mock(async_load=AsyncMock())
     coord.identity = IDENTITY
     coord.state = TvState(FrameMode.ART, True, None)
     coord.connected = True
@@ -53,7 +61,9 @@ async def test_tv_setup_forwards_only_tv_platforms(hass, tv_coordinator):
         patch("custom_components.localthings.snapshot_store") as store,
     ):
         assert await integration.async_setup_entry(hass, entry)
-    forward.assert_awaited_once_with(entry, ["media_player", "remote", "switch"])
+    forward.assert_awaited_once_with(entry, ["media_player", "remote", "switch", "button"])
+    tv_coordinator[0].artwork.async_load.assert_awaited_once_with()
+    tv_coordinator[0].albums.async_load.assert_awaited_once_with()
     assert not appliance.called and not cleanup.called and not store.called
     assert tv_coordinator[1].call_args.kwargs["token"] == "synthetic-token"
     assert tv_coordinator[1].call_args.kwargs["power_token"] == "synthetic-power-token"
@@ -64,7 +74,7 @@ async def test_tv_setup_forwards_only_tv_platforms(hass, tv_coordinator):
         hass.config_entries, "async_unload_platforms", new=AsyncMock(return_value=True)
     ) as unload:
         assert await integration.async_unload_entry(hass, entry)
-    unload.assert_awaited_once_with(entry, ["media_player", "remote", "switch"])
+    unload.assert_awaited_once_with(entry, ["media_player", "remote", "switch", "button"])
     tv_coordinator[0].async_close.assert_awaited_once()
 
 
@@ -102,10 +112,25 @@ async def test_failed_tv_unload_keeps_live_coordinator(hass, tv_coordinator):
 
 async def test_tv_options_do_not_touch_appliance_attributes(hass, tv_coordinator):
     entry = tv_entry(hass)
+    entry.mock_state(hass, ConfigEntryState.LOADED)
     hass.data[DOMAIN] = {entry.entry_id: tv_coordinator[0]}
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] == "create_entry"
-    assert result["data"] == {}
+    request = make_mocked_request("POST", "/api/config/config_entries/options/flow")
+    request["hass_user"] = SimpleNamespace(id="admin", is_admin=True)
+    request["hass_refresh_token_id"] = "refresh"
+    token = current_request.set(request)
+    try:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+    finally:
+        current_request.reset(token)
+    assert result["type"] == "menu"
+    assert result["menu_options"] == [
+        "upload_artwork",
+        "delete_artwork",
+        "delete_artworks",
+        "delete_status",
+        "delete_artworks_status",
+        "upload_finish",
+    ]
     await integration._async_options_updated(hass, entry)
 
 
@@ -159,10 +184,14 @@ async def test_tv_entry_removal_does_not_touch_appliance_stores(hass):
     with (
         patch("custom_components.localthings.snapshot_store") as snapshots,
         patch("custom_components.localthings.mode_spec_store") as modes,
+        patch("custom_components.localthings.album_store") as albums,
     ):
+        albums.return_value.async_remove = AsyncMock()
         await integration.async_remove_entry(hass, entry)
     snapshots.assert_not_called()
     modes.assert_not_called()
+    albums.assert_called_once_with(hass, entry.entry_id)
+    albums.return_value.async_remove.assert_awaited_once_with()
 
 
 @pytest.mark.parametrize("version,success", [(4, True), (5, False)])

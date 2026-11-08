@@ -66,7 +66,8 @@ async def setup_tv(hass):
 
         yield setup
         for entry in entries:
-            await hass.config_entries.async_unload(entry.entry_id)
+            if hass.config_entries.async_get_entry(entry.entry_id) is not None:
+                await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
 
@@ -127,7 +128,9 @@ async def test_turn_on_service_works_while_tv_unknown(hass, setup_tv, mac):
     _, ids, actions, _ = await setup_tv(FrameMode.UNKNOWN, mac=mac, muted=None)
     player = hass.states.get(ids["media_player"])
     assert player.state == "unknown"
-    assert player.attributes["supported_features"] == MediaPlayerEntityFeature.TURN_ON
+    assert player.attributes["supported_features"] == (
+        MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.BROWSE_MEDIA
+    )
     await hass.services.async_call(
         "media_player", "turn_on", {"entity_id": ids["media_player"]}, blocking=True
     )
@@ -152,7 +155,9 @@ async def test_confirmed_off_features_and_controls(hass, setup_tv, mac):
     _, ids, actions, _ = await setup_tv(FrameMode.OFF, mac=mac)
     player = hass.states.get(ids["media_player"])
     assert player.state == "off"
-    assert player.attributes["supported_features"] == MediaPlayerEntityFeature.TURN_ON
+    assert player.attributes["supported_features"] == (
+        MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.BROWSE_MEDIA
+    )
     assert hass.states.get(ids["remote"]).state == "unavailable"
     assert hass.states.get(ids["switch"]).state == "off"
     for domain in ("media_player", "switch"):
@@ -297,11 +302,11 @@ async def test_remote_rejects_unsupported_options(hass, setup_tv, option):
 async def test_entity_inventory_identity_and_no_unverified_features(hass, setup_tv, mac):
     _, ids, _, entry = await setup_tv(mac=mac)
     rows = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-    assert set(ids) == {"media_player", "remote", "switch"}
-    assert len(rows) == 3
+    assert set(ids) == {"media_player", "remote", "switch", "button"}
+    assert len(rows) == 4
     assert {row.unique_id for row in rows} == {
         f"localthings_tv_{IDENTITY.device_id}_{suffix}"
-        for suffix in ("media_player", "remote", "art_mode")
+        for suffix in ("media_player", "remote", "art_mode", "artwork_refresh")
     }
     devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert len(devices) == 1
@@ -319,7 +324,7 @@ async def test_state_changes_update_features_and_availability(hass, setup_tv):
     await hass.async_block_till_done()
     assert hass.states.get(ids["media_player"]).state == "unknown"
     assert hass.states.get(ids["media_player"]).attributes["supported_features"] == (
-        MediaPlayerEntityFeature.TURN_ON
+        MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.BROWSE_MEDIA
     )
     assert hass.states.get(ids["remote"]).state == "unavailable"
     assert hass.states.get(ids["switch"]).state == "unavailable"

@@ -49,6 +49,11 @@ from .registry.subdevices import MAIN
 from .rekey import rekey_entry
 from .services import async_setup_services
 from .tv import TvIdentity
+from .tv_artwork_albums import album_store
+from .tv_artwork_albums_api import register_albums
+from .tv_artwork_cache import artwork_store
+from .tv_artwork_preview import preview_store, register_preview
+from .tv_artwork_slideshow_api import register_slideshow
 from .tv_coordinator import TvCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +82,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Services are process-global, registered once here rather than per
     # config entry (issue #300) -- see services.async_setup_services.
     async_setup_services(hass)
+    register_preview(hass)
+    register_slideshow(hass)
+    register_albums(hass)
     return True
 
 
@@ -586,6 +594,8 @@ async def _async_setup_tv_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool
     )
     try:
         await coordinator.async_config_entry_first_refresh()
+        await coordinator.artwork.async_load()
+        await coordinator.albums.async_load()
         hass.data[DOMAIN][entry.entry_id] = coordinator
         await hass.config_entries.async_forward_entry_setups(entry, TV_PLATFORMS)
     except BaseException:
@@ -654,6 +664,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     forever.
     """
     if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+        coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if coordinator is not None:
+            await coordinator.albums.async_close()
+        await artwork_store(hass, entry.entry_id).async_remove()
+        await album_store(hass, entry.entry_id).async_remove()
         return
     await snapshot_store(hass, entry).async_remove()
     await mode_spec_store(hass, entry).async_remove()
@@ -663,6 +678,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     platforms = TV_PLATFORMS if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS else PLATFORMS
     unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unloaded:
+        if entry.data.get(CONF_TRANSPORT) == TRANSPORT_TV_WS:
+            preview_store(hass).dispose_entry(entry.entry_id)
         coordinator: LocalThingsCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.async_close()
     return unloaded

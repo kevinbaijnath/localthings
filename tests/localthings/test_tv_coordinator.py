@@ -1462,3 +1462,41 @@ async def test_art_confirmation_still_requires_fresh_matching_evidence(
     boundaries["power"].async_set_art_mode.assert_awaited_once_with(enabled)
     boundaries["mute"].assert_awaited_once()
     boundaries["factory"].assert_not_called()
+
+
+async def test_verified_artwork_operation_checks_fresh_identity_under_command_lock(
+    coordinator, boundaries
+):
+    coordinator.async_set_updated_data(TvState(FrameMode.TV, False, False))
+    callback = AsyncMock(return_value="checked")
+    boundaries["identity"].return_value = replace(IDENTITY, device_id="another-tv")
+    with pytest.raises(HomeAssistantError):
+        await coordinator.async_verified_artwork_operation(callback)
+    callback.assert_not_called()
+    boundaries["identity"].return_value = IDENTITY
+    coordinator.async_set_updated_data(TvState(FrameMode.TV, False, False))
+
+    async def operation():
+        assert coordinator._command_lock.locked()
+        return "checked"
+
+    callback.side_effect = operation
+    assert await coordinator.async_verified_artwork_operation(callback) == "checked"
+
+
+async def test_verified_artwork_operation_serializes_local_commands(coordinator, boundaries):
+    coordinator.async_set_updated_data(TvState(FrameMode.TV, False, False))
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def operation():
+        started.set()
+        await release.wait()
+
+    deleting = asyncio.create_task(coordinator.async_verified_artwork_operation(operation))
+    await started.wait()
+    key = asyncio.create_task(coordinator.async_send_key("KEY_HOME"))
+    await asyncio.sleep(0)
+    boundaries["client"].send_key.assert_not_called()
+    release.set()
+    await asyncio.gather(deleting, key)
+    boundaries["client"].send_key.assert_called_once_with("KEY_HOME")
